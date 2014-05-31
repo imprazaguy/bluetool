@@ -1,6 +1,5 @@
-"""HCI ACL data and SCO data
+"""HCI ACL data and SCO data.
 """
-
 from .utils import letoh16
 
 class HCIACLData(object):

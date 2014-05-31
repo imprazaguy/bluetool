@@ -1,9 +1,6 @@
 """HCI event.
 """
-
-import struct
-import bluetooth._bluetooth as bluez
-
+from . import bluez
 from .utils import letohs8, letoh16, letoh24
 
 class HCIEventParseError(Exception):
@@ -24,29 +21,29 @@ class HCIEvent(object):
     def get_pkt_size(buf, offset=0):
         return 2 + ord(buf[offset + 1])
 
-class HCIInquiryCompleteEvent(HCIEvent):
+class InquiryCompleteEvent(HCIEvent):
     def __init__(self):
-        super(HCIInquiryCompleteEvent, self).__init__(bluez.EVT_INQUIRY_COMPLETE)
+        super(InquiryCompleteEvent, self).__init__(bluez.EVT_INQUIRY_COMPLETE)
 
     def unpack_param(self, buf, offset):
         self.status = ord(buf[offset])
 
-def _parse_hci_cmd_complt_evt_param_status(evt, buf, offset):
+def _parse_cmd_complt_evt_param_status(evt, buf, offset):
     evt.status = ord(buf[offset])
 
-def _parse_hci_cmd_complt_evt_param_read_inquiry_mode(evt, buf, offset):
+def _parse_cmd_complt_evt_param_read_inquiry_mode(evt, buf, offset):
     evt.status = ord(buf[offset])
     offset += 1
     evt.inquiry_mode = ord(buf[offset])
 
-class HCICommandCompleteEvent(HCIEvent):
+class CommandCompleteEvent(HCIEvent):
     ret_param_parser = {
-            0x0C44: _parse_hci_cmd_complt_evt_param_read_inquiry_mode,
-            0x0C45: _parse_hci_cmd_complt_evt_param_status,
+            0x0C44: _parse_cmd_complt_evt_param_read_inquiry_mode,
+            0x0C45: _parse_cmd_complt_evt_param_status,
     }
 
     def __init__(self):
-        super(HCICommandCompleteEvent, self).__init__(bluez.EVT_CMD_COMPLETE)
+        super(CommandCompleteEvent, self).__init__(bluez.EVT_CMD_COMPLETE)
 
     def unpack_param(self, buf, offset=0):
         self.num_hci_cmd_pkt = ord(buf[offset])
@@ -55,9 +52,9 @@ class HCICommandCompleteEvent(HCIEvent):
         offset += 2
         self.ret_param_parser[self.cmd_opcode](self, buf, offset)
 
-class HCICommandStatusEvent(HCIEvent):
+class CommandStatusEvent(HCIEvent):
     def __init__(self):
-        super(HCICommandStatusEvent, self).__init__(bluez.EVT_CMD_STATUS)
+        super(CommandStatusEvent, self).__init__(bluez.EVT_CMD_STATUS)
 
     def unpack_param(self, buf, offset):
         self.status = ord(buf[offset])
@@ -66,9 +63,9 @@ class HCICommandStatusEvent(HCIEvent):
         offset += 1
         self.cmd_opcode = letoh16(buf, offset)
 
-class HCIInquiryResultWithRSSIEvent(HCIEvent):
+class InquiryResultWithRSSIEvent(HCIEvent):
     def __init__(self):
-        super(HCIInquiryResultWithRSSIEvent, self).__init__(
+        super(InquiryResultWithRSSIEvent, self).__init__(
                 bluez.EVT_INQUIRY_RESULT_WITH_RSSI)
 
     def unpack_param(self, buf, offset):
@@ -83,7 +80,7 @@ class HCIInquiryResultWithRSSIEvent(HCIEvent):
         self.rssi = [0]*num_responses
         i = 0
         while i < self.num_responses:
-            self.bd_addr[i] = str(buf[offset:offset+6])
+            self.bd_addr[i] = buf[offset:offset+6]
             offset += 6
             self.page_scan_repetition_mode[i] = ord(buf[offset])
             offset += 1
@@ -97,11 +94,42 @@ class HCIInquiryResultWithRSSIEvent(HCIEvent):
             offset += 1
             i += 1
 
+class LEMetaEvent(HCIEvent):
+    def __init__(self, subevt_code):
+        super(LEMetaEvent, self).__init__(bluez.EVT_LE_META_EVENT)
+
+class LEConnectionCompleteEvent(LEMetaEvent):
+    def __init__(self):
+        super(LEConnectionCompleteEvent, self).__init__(self, bluez.EVT_LE_CONN_COMPLETE)
+
+    def unpack_param(self, buf, offset):
+        self.status = ord(buf[offset])
+        offset += 1
+        self.conn_handle = letoh16(buf, offset)
+        offset += 2
+        self.role = ord(buf[offset])
+        offset += 1
+        self.peer_addr_type = ord(buf[offset])
+        offset += 1
+        self.peer_addr = buf[offset:offset+6]
+        offset += 6
+        self.conn_intvl = letoh16(buf, offset)
+        offset += 2
+        self.conn_latency = letoh16(buf, offset)
+        offset += 2
+        self.supv_timeout = letoh16(buf, offset)
+        offset += 2
+        self.master_clk_accuracy = ord(buf[offset])
+
 _evt_table = {
-        bluez.EVT_INQUIRY_COMPLETE: HCIInquiryCompleteEvent,
-        bluez.EVT_CMD_COMPLETE: HCICommandCompleteEvent,
-        bluez.EVT_CMD_STATUS: HCICommandStatusEvent,
-        bluez.EVT_INQUIRY_RESULT_WITH_RSSI: HCIInquiryResultWithRSSIEvent,
+        bluez.EVT_INQUIRY_COMPLETE: InquiryCompleteEvent,
+        bluez.EVT_CMD_COMPLETE: CommandCompleteEvent,
+        bluez.EVT_CMD_STATUS: CommandStatusEvent,
+        bluez.EVT_INQUIRY_RESULT_WITH_RSSI: InquiryResultWithRSSIEvent,
+}
+
+_le_evt_table = {
+        bluez.EVT_LE_CONN_COMPLETE: LEConnectionCompleteEvent
 }
 
 def parse_hci_event(code, buf, offset=0):
@@ -109,7 +137,12 @@ def parse_hci_event(code, buf, offset=0):
     
     offset is the start offset of event parameters.
     """
-    evt = _evt_table[code]()
+    if code == bluez.EVT_LE_META_EVENT:
+        le_code = ord(buf[offset])
+        offset += 1
+        evt = _le_evt_table[le_code]()
+    else:
+        evt = _evt_table[code]()
     evt.unpack_param(buf, offset)
     return evt
 

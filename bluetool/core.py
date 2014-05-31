@@ -1,7 +1,8 @@
-
+"""Core module for HCI operations.
+"""
 import struct
-import bluetooth._bluetooth as bluez
 
+from . import bluez
 from .command import HCICommand
 from .event import HCIEvent, parse_hci_event
 from .data import HCIACLData, HCISCOData
