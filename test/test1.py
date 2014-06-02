@@ -15,51 +15,48 @@ class InquiryRSSIWorker(HCIWorker):
 
     def read_inquiry_mode(self):
         cmd_pkt = HCIReadInquiryMode()
-        worker.send_hci_cmd(cmd_pkt)
-        evt = worker.recv_hci_evt(worker.get_hci_filter(
-            event=bluez.EVT_CMD_COMPLETE, opcode=cmd_pkt.opcode))
+        self.send_hci_cmd(cmd_pkt)
+        self.set_hci_filter(self.new_hci_filter(
+            event=(bluez.EVT_CMD_COMPLETE,), opcode=cmd_pkt.opcode))
+        evt = self.recv_hci_evt()
         if evt.status != 0:
             return -1
         return evt.inquiry_mode
 
     def write_inquiry_mode(self, mode):
         cmd_pkt = HCIWriteInquiryMode(mode)
-        worker.send_hci_cmd(cmd_pkt)
-        evt = worker.recv_hci_evt(worker.get_hci_filter(
-            event=bluez.EVT_CMD_COMPLETE, opcode=cmd_pkt.opcode))
+        self.send_hci_cmd(cmd_pkt)
+        self.set_hci_filter(self.new_hci_filter(
+            event=(bluez.EVT_CMD_COMPLETE,), opcode=cmd_pkt.opcode))
+        evt = self.recv_hci_evt()
         if evt.status != 0:
             return -1
         return 0
 
     def inquiry_with_rssi(self):
-        self.set_hci_filter(self.get_hci_filter(event='all'))
+        self.set_hci_filter(self.new_hci_filter())
 
         cmd_pkt = HCIInquiry(0x9e8b33, 4, 255)
-        worker.send_hci_cmd(cmd_pkt)
+        self.send_hci_cmd(cmd_pkt)
 
         results = []
         done = False
         while not done:
-            pkt = self.sock.recv(255)
-            ptype, event, plen = struct.unpack("BBB", pkt[:3])
-            if event == bluez.EVT_INQUIRY_RESULT_WITH_RSSI:
-                pkt = pkt[3:]
-                nrsp = struct.unpack("B", pkt[0])[0]
-                for i in range(nrsp):
-                    addr = bluez.ba2str( pkt[1+6*i:1+6*i+6] )
-                    rssi = struct.unpack("b", pkt[1+13*nrsp+i])[0]
+            evt = self.recv_hci_evt()
+            if evt.code == bluez.EVT_INQUIRY_RESULT_WITH_RSSI:
+                for i in xrange(evt.num_responses):
+                    addr = bluez.ba2str(evt.bd_addr[i])
+                    rssi = evt.rssi[i]
                     results.append( ( addr, rssi ) )
-                    print "[%s] RSSI: [%d]" % (addr, rssi)
-            elif event == bluez.EVT_INQUIRY_COMPLETE:
+                    print "[{}] RSSI: [{}]".format(addr, rssi)
+            elif evt.code == bluez.EVT_INQUIRY_COMPLETE:
                 done = True
-            elif event == bluez.EVT_CMD_STATUS:
-                status, ncmd, opcode = struct.unpack("BBH", pkt[3:7])
-                if status != 0:
+            elif evt.code == bluez.EVT_CMD_STATUS:
+                if evt.status != 0:
                     print "uh oh..."
-                    printpacket(pkt[3:7])
                     done = True
             else:
-                print "unrecognized packet type 0x%02x" % ptype
+                print "unrecognized packet type"
 
 
     def run(self):
@@ -82,11 +79,11 @@ def printpacket(pkt):
 if __name__ == "__main__":
     dev_id = 0
     try:
-        sock = bluez.hci_open_dev(dev_id)
+        hci_sock = HCISock(dev_id)
     except:
         print "error accessing bluetooth device..."
         sys.exit(1)
 
-    worker = InquiryRSSIWorker(sock)
+    worker = InquiryRSSIWorker(hci_sock)
     worker.run()
 

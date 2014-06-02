@@ -24,12 +24,9 @@ class HCICommand(object):
         """
         return None
 
-    def send(self, sock):
-        param = self.pack_param()
-        if param is not None:
-            bluez.hci_send_cmd(sock, self.ogf, self.ocf, param)
-        else:
-            bluez.hci_send_cmd(sock, self.ogf, self.ocf)
+    @staticmethod
+    def get_pkt_size(buf, offset=0):
+        return 3 + ord(buf[offset + 2])
 
 class HCIReadInquiryMode(HCICommand):
     def __init__(self):
