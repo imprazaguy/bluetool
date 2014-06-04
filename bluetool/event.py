@@ -36,12 +36,19 @@ def _parse_cmd_complt_evt_param_read_inquiry_mode(evt, buf, offset):
     offset += 1
     evt.inquiry_mode = ord(buf[offset])
 
-class CommandCompleteEvent(HCIEvent):
-    ret_param_parser = {
-            0x0C44: _parse_cmd_complt_evt_param_read_inquiry_mode,
-            0x0C45: _parse_cmd_complt_evt_param_status,
-    }
+def _parse_cmd_complt_evt_param_read_bd_addr(evt, buf, offset):
+    evt.status = ord(buf[offset])
+    offset += 1
+    evt.bd_addr = buf[offset:offset+6]
 
+_cmd_complt_evt_param_parser = {
+        0x0C03: _parse_cmd_complt_evt_param_status,
+        0x0C44: _parse_cmd_complt_evt_param_read_inquiry_mode,
+        0x0C45: _parse_cmd_complt_evt_param_status,
+        0x1009: _parse_cmd_complt_evt_param_read_bd_addr,
+}
+
+class CommandCompleteEvent(HCIEvent):
     def __init__(self):
         super(CommandCompleteEvent, self).__init__(bluez.EVT_CMD_COMPLETE)
 
@@ -50,7 +57,7 @@ class CommandCompleteEvent(HCIEvent):
         offset += 1
         self.cmd_opcode = letoh16(buf, offset)
         offset += 2
-        self.ret_param_parser[self.cmd_opcode](self, buf, offset)
+        _cmd_complt_evt_param_parser[self.cmd_opcode](self, buf, offset)
 
 class CommandStatusEvent(HCIEvent):
     def __init__(self):

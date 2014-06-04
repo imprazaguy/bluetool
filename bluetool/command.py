@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 """HCI command.
 """
-import struct
-
 from . import bluez
+from .utils import htole8, htole16, htole24
 
 
 class HCICommand(object):
     """Base HCI command object."""
 
     def __init__(self, ogf, ocf):
+        super(HCICommand, self).__init__()
         self.ogf = ogf
         self.ocf = ocf
 
@@ -28,41 +28,60 @@ class HCICommand(object):
     def get_pkt_size(buf, offset=0):
         return 3 + ord(buf[offset + 2])
 
-class HCIReadInquiryMode(HCICommand):
-    def __init__(self):
-        super(HCIReadInquiryMode, self).__init__(bluez.OGF_HOST_CTL,
-                bluez.OCF_READ_INQUIRY_MODE)
 
-class HCIWriteInquiryMode(HCICommand):
-    param_fmt = struct.Struct('<B')
+class HCILinkControlCommand(HCICommand):
+    def __init__(self, ocf):
+        super(HCILinkControlCommand, self).__init__(bluez.OGF_LINK_CTL, ocf)
 
-    def __init__(self, mode):
-        super(HCIWriteInquiryMode, self).__init__(bluez.OGF_HOST_CTL,
-                bluez.OCF_WRITE_INQUIRY_MODE)
-        self.mode = mode
-
-    def pack_param(self):
-        return self.param_fmt.pack(self.mode)
-
-class HCIInquiry(HCICommand):
+class HCIInquiry(HCILinkControlCommand):
     def __init__(self, lap, inquiry_len, num_responses):
-        super(HCIInquiry, self).__init__(bluez.OGF_LINK_CTL, bluez.OCF_INQUIRY)
+        super(HCIInquiry, self).__init__(bluez.OCF_INQUIRY)
         self.lap = lap
         self.inquiry_len = inquiry_len
         self.num_responses = num_responses
 
     def pack_param(self):
-        param = struct.pack('<I', self.lap)[:3]
-        param += struct.pack('<BB', self.inquiry_len, self.num_responses)
-        return param
+        return ''.join(
+                (htole24(self.lap),
+                    htole8(self.inquiry_len),
+                    htole8(self.num_responses)))
+
+ 
+class HCIControllerCommand(HCICommand):
+    def __init__(self, ocf):
+        super(HCIControllerCommand, self).__init__(bluez.OGF_HOST_CTL, ocf)
+
+class HCIReset(HCIControllerCommand):
+    def __init__(self):
+        super(HCIReset, self).__init__(bluez.OCF_RESET)
+
+class HCIReadInquiryMode(HCIControllerCommand):
+    def __init__(self):
+        super(HCIReadInquiryMode, self).__init__(bluez.OCF_READ_INQUIRY_MODE)
+
+class HCIWriteInquiryMode(HCIControllerCommand):
+    def __init__(self, mode):
+        super(HCIWriteInquiryMode, self).__init__(bluez.OCF_WRITE_INQUIRY_MODE)
+        self.mode = mode
+
+    def pack_param(self):
+        return htole8(self.mode)
+
+
+class HCIInfoParamCommand(HCICommand):
+    def __init__(self, ocf):
+        super(HCILEControllerCommand, self).__init__(bluez.OGF_INFO_PARAM, ocf)
+
+class HCIReadBDAddr(HCIInfoParamCommand):
+    def __init__(self):
+        super(HCIReadBDAddr, self).__init__(bluez.OCF_READ_BD_ADDR)
+
 
 class HCILEControllerCommand(HCICommand):
     def __init__(self, ocf):
-        super(HCILEControllerCommand, self).__init__(bluz.OGF_LE_CTL, ocf)
+        super(HCILEControllerCommand, self).__init__(bluez.OGF_LE_CTL, ocf)
 
 class HCILESetAdvertisingParameters(HCILEControllerCommand):
-    param_fmt = struct.Struct('<HHBBB6sBB')
-
     def __init__(self, adv_intvl_min, adv_intvl_max, adv_type, own_addr_type, direct_addr_type, direct_addr, adv_channel_map, adv_filter_policy):
         super(HCILESetAdvertisingParameter, self).__init__(
                 bluez.OCF_LE_SET_ADVERTISING_PARAMETERS)
@@ -76,9 +95,15 @@ class HCILESetAdvertisingParameters(HCILEControllerCommand):
         self.adv_filter_policy = adv_filter_policy
 
     def pack_param(self):
-        return self.param_fmt.pack(self.adv_intvl_min, self.adv_intvl_max,
-                self.adv_type, self.own_addr_type, self.direct_addr_type,
-                self.direct_addr, self.adv_channel_map, self.adv_filter_policy)
+        return ''.join(
+                (htole16(self.adv_intvl_min),
+                    htole16(self.adv_intvl_max),
+                    htole8(self.adv_type),
+                    htole8(self.own_addr_type),
+                    htole8(self.direct_addr_type),
+                    self.direct_addr,
+                    htole8(self.adv_channel_map),
+                    htole8(self.adv_filter_policy)))
 
 class HCILESetAdvertisingData(HCILEControllerCommand):
     def __init__(self, adv_data_len, adv_data):
@@ -88,17 +113,16 @@ class HCILESetAdvertisingData(HCILEControllerCommand):
         self.adv_data = adv_data
 
     def pack_param(self):
-        param = struct.pack('<B', self.adv_data_len)
-        param += self.adv_data
-        return param
+        return ''.join((htole8(self.adv_data_len), self.adv_data))
 
 class HCILESetAdvertiseEnable(HCILEControllerCommand):
     def __init__(self, adv_enable):
         super(HCILESetAdvertiseEnable, self).__init__(
                 bluez.OCF_LE_SET_ADVERTISE_ENABLE)
         self.adv_enable = adv_enable
+
     def pack_param(self):
-        return struct.pack('<B', self.adv_enable)
+        return htole8(self.adv_enable)
 
 class HCILEReadWhiteListSize(HCILEControllerCommand):
     def __init__(self):
@@ -110,8 +134,6 @@ class HCILEClearWhiteList(HCILEControllerCommand):
         super(HCILEClearWhiteList, self).__init__(bluez.OCF_LE_CLEAR_WHITE_LIST)
 
 class HCILEAddDeviceToWhiteList(HCILEControllerCommand):
-    param_fmt = struct.Struct('<B6s')
-
     def __init__(self, addr_type, addr):
         super(HCILEAddDeviceToWhiteList, self).__init__(
                 bluez.OCF_LE_ADD_DEVICE_TO_WHITE_LIST)
@@ -119,11 +141,9 @@ class HCILEAddDeviceToWhiteList(HCILEControllerCommand):
         self.addr = addr
 
     def pack_param(self):
-        return self.param_fmt.pack(self.addr_type, self.addr)
+        return ''.join((htole8(self.addr_type), self.addr))
 
 class HCILERemoveDeviceFromWhiteList(HCILEControllerCommand):
-    param_fmt = struct.Struct('<B6s')
-
     def __init__(self, addr_type, addr):
         super(HCILERemoveDeviceFromWhiteList, self).__init__(
                 bluez.OCF_LE_REMOVE_DEVICE_FROM_WHITE_LIST)
@@ -131,11 +151,9 @@ class HCILERemoveDeviceFromWhiteList(HCILEControllerCommand):
         self.addr = addr
 
     def pack_param(self):
-        return self.param_fmt.pack(self.addr_type, self.addr)
+        return ''.join((htole8(self.addr_type), self.addr))
 
 class HCILECreateConnection(HCILEControllerCommand):
-    param_fmt = struct.Struct('<HHBB6sBHHHHHH')
-
     def __init__(self, scan_intvl, scan_win, init_filter_policy, peer_addr_type, peer_addr, own_addr_type, conn_intvl_min, conn_intvl_max, conn_latency, supv_timeout, min_ce_len, max_ce_len):
         super(HCILECreateConnection, self).__init__(bluez.OCF_LE_CREATE_CONN)
         self.scan_intvl = scan_intvl
@@ -152,8 +170,17 @@ class HCILECreateConnection(HCILEControllerCommand):
         self.max_ce_len = max_ce_len
 
     def pack_param(self):
-        return self.param_fmt.pack(self.scan_intvl, self.scan_win,
-                self.init_filter_policy, self.peer_addr_type, self.peer_addr,
-                self.own_addr_type, self.conn_intvl_min, self.conn_intvl_max,
-                self.conn_latency, self.supv_timeout, self.min_ce_len,
-                self.max_ce_len)
+        return ''.join(
+                (htole16(self.scan_intvl),
+                    htole16(self.scan_win),
+                    htole8(self.init_filter_policy),
+                    htole8(self.peer_addr_type),
+                    self.peer_addr,
+                    htole8(self.own_addr_type),
+                    htole16(self.conn_intvl_min),
+                    htole16(self.conn_intvl_max),
+                    htole16(self.conn_latency),
+                    htole16(self.supv_timeout),
+                    htole16(self.min_ce_len),
+                    htole16(self.max_ce_len)))
+

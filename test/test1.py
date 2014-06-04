@@ -16,8 +16,8 @@ class InquiryRSSIWorker(HCIWorker):
     def read_inquiry_mode(self):
         cmd_pkt = HCIReadInquiryMode()
         self.send_hci_cmd(cmd_pkt)
-        self.set_hci_filter(self.new_hci_filter(
-            event=(bluez.EVT_CMD_COMPLETE,), opcode=cmd_pkt.opcode))
+        self.set_hci_filter(HCIFilter(ptypes=bluez.HCI_EVENT_PKT,
+            events=bluez.EVT_CMD_COMPLETE, opcode=cmd_pkt.opcode))
         evt = self.recv_hci_evt()
         if evt.status != 0:
             return -1
@@ -26,15 +26,15 @@ class InquiryRSSIWorker(HCIWorker):
     def write_inquiry_mode(self, mode):
         cmd_pkt = HCIWriteInquiryMode(mode)
         self.send_hci_cmd(cmd_pkt)
-        self.set_hci_filter(self.new_hci_filter(
-            event=(bluez.EVT_CMD_COMPLETE,), opcode=cmd_pkt.opcode))
+        self.set_hci_filter(HCIFilter(ptypes=bluez.HCI_EVENT_PKT,
+            events=bluez.EVT_CMD_COMPLETE, opcode=cmd_pkt.opcode))
         evt = self.recv_hci_evt()
         if evt.status != 0:
             return -1
         return 0
 
     def inquiry_with_rssi(self):
-        self.set_hci_filter(self.new_hci_filter())
+        self.set_hci_filter(HCIFilter(ptypes=bluez.HCI_EVENT_PKT).all_events())
 
         cmd_pkt = HCIInquiry(0x9e8b33, 4, 255)
         self.send_hci_cmd(cmd_pkt)
@@ -63,7 +63,7 @@ class InquiryRSSIWorker(HCIWorker):
         mode = self.read_inquiry_mode()
         print "current inquiry mode is {}".format(mode)
 
-        if mode == mode:
+        if mode != 1:
             print "writing inquiry mode..."
             result = self.write_inquiry_mode(1)
             if result != 0:
