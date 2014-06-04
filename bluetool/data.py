@@ -1,6 +1,6 @@
 """HCI ACL data and SCO data.
 """
-from .utils import letoh16
+from .utils import letoh8, letoh16
 
 class HCIACLData(object):
     def __init__(self, handle):
@@ -16,4 +16,4 @@ class HCISCOData(object):
 
     @staticmethod
     def get_pkt_size(buf, offset=0):
-        return 3 + ord(buf[offset + 2])
+        return 3 + letoh8(buf, offset + 2)

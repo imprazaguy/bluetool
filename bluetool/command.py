@@ -2,7 +2,7 @@
 """HCI command.
 """
 from . import bluez
-from .utils import htole8, htole16, htole24
+from .utils import letoh8, htole8, htole16, htole24, htole64
 
 
 class HCICommand(object):
@@ -26,7 +26,7 @@ class HCICommand(object):
 
     @staticmethod
     def get_pkt_size(buf, offset=0):
-        return 3 + ord(buf[offset + 2])
+        return 3 + letoh8(buf, offset + 2)
 
 
 class HCILinkControlCommand(HCICommand):
@@ -51,6 +51,14 @@ class HCIControllerCommand(HCICommand):
     def __init__(self, ocf):
         super(HCIControllerCommand, self).__init__(bluez.OGF_HOST_CTL, ocf)
 
+class HCISetEventMask(HCIControllerCommand):
+    def __init__(self, event_mask):
+        super(HCISetEventMask, self).__init__(bluez.OCF_SET_EVENT_MASK)
+        self.event_mask = event_mask
+
+    def pack_param(self):
+        return htole64(self.event_mask)
+
 class HCIReset(HCIControllerCommand):
     def __init__(self):
         super(HCIReset, self).__init__(bluez.OCF_RESET)
@@ -70,7 +78,7 @@ class HCIWriteInquiryMode(HCIControllerCommand):
 
 class HCIInfoParamCommand(HCICommand):
     def __init__(self, ocf):
-        super(HCILEControllerCommand, self).__init__(bluez.OGF_INFO_PARAM, ocf)
+        super(HCIInfoParamCommand, self).__init__(bluez.OGF_INFO_PARAM, ocf)
 
 class HCIReadBDAddr(HCIInfoParamCommand):
     def __init__(self):
@@ -83,7 +91,7 @@ class HCILEControllerCommand(HCICommand):
 
 class HCILESetAdvertisingParameters(HCILEControllerCommand):
     def __init__(self, adv_intvl_min, adv_intvl_max, adv_type, own_addr_type, direct_addr_type, direct_addr, adv_channel_map, adv_filter_policy):
-        super(HCILESetAdvertisingParameter, self).__init__(
+        super(HCILESetAdvertisingParameters, self).__init__(
                 bluez.OCF_LE_SET_ADVERTISING_PARAMETERS)
         self.adv_intvl_min = adv_intvl_min
         self.adv_intvl_max = adv_intvl_max
@@ -124,35 +132,6 @@ class HCILESetAdvertiseEnable(HCILEControllerCommand):
     def pack_param(self):
         return htole8(self.adv_enable)
 
-class HCILEReadWhiteListSize(HCILEControllerCommand):
-    def __init__(self):
-        super(HCILEReadWhiteListSize, self).__init__(
-                bluez.OCF_LE_READ_WHITE_LIST_SIZE)
-
-class HCILEClearWhiteList(HCILEControllerCommand):
-    def __init__(self):
-        super(HCILEClearWhiteList, self).__init__(bluez.OCF_LE_CLEAR_WHITE_LIST)
-
-class HCILEAddDeviceToWhiteList(HCILEControllerCommand):
-    def __init__(self, addr_type, addr):
-        super(HCILEAddDeviceToWhiteList, self).__init__(
-                bluez.OCF_LE_ADD_DEVICE_TO_WHITE_LIST)
-        self.addr_type = addr_type
-        self.addr = addr
-
-    def pack_param(self):
-        return ''.join((htole8(self.addr_type), self.addr))
-
-class HCILERemoveDeviceFromWhiteList(HCILEControllerCommand):
-    def __init__(self, addr_type, addr):
-        super(HCILERemoveDeviceFromWhiteList, self).__init__(
-                bluez.OCF_LE_REMOVE_DEVICE_FROM_WHITE_LIST)
-        self.addr_type = addr_type
-        self.addr = addr
-
-    def pack_param(self):
-        return ''.join((htole8(self.addr_type), self.addr))
-
 class HCILECreateConnection(HCILEControllerCommand):
     def __init__(self, scan_intvl, scan_win, init_filter_policy, peer_addr_type, peer_addr, own_addr_type, conn_intvl_min, conn_intvl_max, conn_latency, supv_timeout, min_ce_len, max_ce_len):
         super(HCILECreateConnection, self).__init__(bluez.OCF_LE_CREATE_CONN)
@@ -183,4 +162,33 @@ class HCILECreateConnection(HCILEControllerCommand):
                     htole16(self.supv_timeout),
                     htole16(self.min_ce_len),
                     htole16(self.max_ce_len)))
+
+class HCILEReadWhiteListSize(HCILEControllerCommand):
+    def __init__(self):
+        super(HCILEReadWhiteListSize, self).__init__(
+                bluez.OCF_LE_READ_WHITE_LIST_SIZE)
+
+class HCILEClearWhiteList(HCILEControllerCommand):
+    def __init__(self):
+        super(HCILEClearWhiteList, self).__init__(bluez.OCF_LE_CLEAR_WHITE_LIST)
+
+class HCILEAddDeviceToWhiteList(HCILEControllerCommand):
+    def __init__(self, addr_type, addr):
+        super(HCILEAddDeviceToWhiteList, self).__init__(
+                bluez.OCF_LE_ADD_DEVICE_TO_WHITE_LIST)
+        self.addr_type = addr_type
+        self.addr = addr
+
+    def pack_param(self):
+        return ''.join((htole8(self.addr_type), self.addr))
+
+class HCILERemoveDeviceFromWhiteList(HCILEControllerCommand):
+    def __init__(self, addr_type, addr):
+        super(HCILERemoveDeviceFromWhiteList, self).__init__(
+                bluez.OCF_LE_REMOVE_DEVICE_FROM_WHITE_LIST)
+        self.addr_type = addr_type
+        self.addr = addr
+
+    def pack_param(self):
+        return ''.join((htole8(self.addr_type), self.addr))
 

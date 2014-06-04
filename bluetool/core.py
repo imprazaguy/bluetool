@@ -3,7 +3,7 @@
 import struct
 
 from . import bluez
-from .command import HCICommand
+from .command import HCICommand, HCIReadBDAddr
 from .event import HCIEvent, parse_hci_event
 from .data import HCIACLData, HCISCOData
 
@@ -82,12 +82,12 @@ class HCISock(object):
         self.sock = bluez.hci_open_dev(dev_id)
         self.rbuf = ''
     
-    def send_hci_cmd(self, cmd_pkt):
-        param = cmd_pkt.pack_param()
+    def send_hci_cmd(self, cmd):
+        param = cmd.pack_param()
         if param is not None:
-            bluez.hci_send_cmd(self.sock, cmd_pkt.ogf, cmd_pkt.ocf, param)
+            bluez.hci_send_cmd(self.sock, cmd.ogf, cmd.ocf, param)
         else:
-            bluez.hci_send_cmd(self.sock, cmd_pkt.ogf, cmd_pkt.ocf)
+            bluez.hci_send_cmd(self.sock, cmd.ogf, cmd.ocf)
 
     def get_hci_filter(self):
         return HCIFilter(self.sock.getsockopt(bluez.SOL_HCI, bluez.HCI_FILTER, 14))
@@ -121,20 +121,35 @@ class HCIWorker(object):
     def run(self):
         raise NotImplementedError
 
-    def send_hci_cmd(self, cmd_pkt):
-        self.sock.send_hci_cmd(cmd_pkt)
+    def send_hci_cmd(self, cmd):
+        self.sock.send_hci_cmd(cmd)
 
     def get_hci_filter(self):
         return self.sock.get_hci_filter()
-
-    def new_hci_filter(self, ptype=None, event=None, opcode=None):
-        return self.sock.new_hci_filter(ptype, event, opcode)
 
     def set_hci_filter(self, flt):
         self.sock.set_hci_filter(flt)
 
     def recv_hci_evt(self):
         return self.sock.recv_hci_evt()
+
+    def send_hci_cmd_wait_cmd_complt(self, cmd):
+        old_flt = self.get_hci_filter()
+        self.set_hci_filter(HCIFilter(ptypes=bluez.HCI_EVENT_PKT,
+            events=bluez.EVT_CMD_COMPLETE, opcode=cmd.opcode))
+        self.send_hci_cmd(cmd)
+        evt = self.recv_hci_evt()
+        self.set_hci_filter(old_flt)
+        return evt
+
+    def send_hci_cmd_wait_cmd_status(self, cmd):
+        old_flt = self.get_hci_filter()
+        self.set_hci_filter(HCIFilter(ptypes=bluez.HCI_EVENT_PKT,
+            events=bluez.EVT_CMD_STATUS))
+        self.send_hci_cmd(cmd)
+        evt = self.recv_hci_evt()
+        self.set_hci_filter(old_flt)
+        return evt
 
 class HCICoordinator(object):
     def __init__(self, *args):
@@ -147,8 +162,8 @@ class HCICoordinator(object):
 
     def get_bd_addr(self, sock):
         cmd = HCIReadBDAddr()
-        sock.set_hci_filter(HCISock.new_hci_filter(
-            event=bluez.EVT_CMD_COMPLETE, opcode=cmd.opcode))
+        sock.set_hci_filter(HCIFilter(ptypes=bluez.HCI_EVENT_PKT,
+            events=bluez.EVT_CMD_COMPLETE, opcode=cmd.opcode))
         sock.send_hci_cmd(cmd)
         evt = sock.recv_hci_evt()
         return evt.bd_addr
