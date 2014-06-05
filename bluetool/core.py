@@ -1,20 +1,12 @@
 """Core module for HCI operations.
 """
-import struct
+import multiprocessing as mp
 
 from . import bluez
 from .command import HCICommand, HCIReadBDAddr
 from .event import HCIEvent, parse_hci_event
 from .data import HCIACLData, HCISCOData
 
-class HCITask(object):
-    def __init__(self, worker):
-        super(HCITask, self).__init__()
-        self.worker = worker
-
-    def run(self):
-        """Perform actions."""
-        raise NotImplementedError
 
 class HCIError(Exception):
     def __init__(self, msg):
@@ -113,13 +105,10 @@ class HCISock(object):
         self.rbuf = self.rbuf[3+plen:]
         return evt
 
-class HCIWorker(object):
+class HCITask(object):
     def __init__(self, hci_sock):
-        super(HCIWorker, self).__init__()
+        super(HCITask, self).__init__()
         self.sock = hci_sock
-
-    def run(self):
-        raise NotImplementedError
 
     def send_hci_cmd(self, cmd):
         self.sock.send_hci_cmd(cmd)
@@ -151,6 +140,34 @@ class HCIWorker(object):
         self.set_hci_filter(old_flt)
         return evt
 
+class HCIWorker(HCITask, mp.Process):
+    def __init__(self, hci_sock, conn=None):
+        super(HCIManagedWorker, self).__init__(hci_sock)
+        self.conn = conn
+        self.event = mp.Event()
+
+    def wait(self):
+        self.event.wait()
+        self.event.clear()
+
+    def signal(self):
+        self.event.set()
+
+    def send(self, obj):
+        self.conn.send(obj)
+
+    def recv(self):
+        return self.conn.recv()
+
+class ReadBDAddrTask(HCITask):
+    def __init__(self, hci_sock):
+        super(ReadBDAddrTask, self).__init__(hci_sock)
+
+    def read_bd_addr(self):
+        cmd = HCIReadBDAddr()
+        evt = self.send_hci_cmd_wait_cmd_complt()
+        return evt.bd_addr
+
 class HCICoordinator(object):
     def __init__(self, *args):
         super(HCICoordinator, self).__init__()
@@ -158,15 +175,7 @@ class HCICoordinator(object):
         self.bd_addr = [None]*len(args)
         for i in xrange(0, len(args)):
             self.sock[i] = HCISock(args[i])
-            self.bd_addr[i] = self.get_bd_addr(self.sock[i])
-
-    def get_bd_addr(self, sock):
-        cmd = HCIReadBDAddr()
-        sock.set_hci_filter(HCIFilter(ptypes=bluez.HCI_EVENT_PKT,
-            events=bluez.EVT_CMD_COMPLETE, opcode=cmd.opcode))
-        sock.send_hci_cmd(cmd)
-        evt = sock.recv_hci_evt()
-        return evt.bd_addr
+            self.bd_addr[i] = ReadBDAddrTask(self.sock[i]).read_bd_addr()
 
     def main(self):
         raise NotImplementedError

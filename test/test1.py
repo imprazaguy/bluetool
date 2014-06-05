@@ -9,7 +9,7 @@ import struct
 import os
 import bluetooth._bluetooth as bluez
 
-class InquiryRSSIWorker(HCIWorker):
+class InquiryRSSIWorker(HCITask):
     def __init__(self, sock):
         super(InquiryRSSIWorker, self).__init__(sock)
 

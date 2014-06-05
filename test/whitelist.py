@@ -1,18 +1,16 @@
 """Test white list add/remove
 """
-from multiprocessing import Process
-
-from bluetool.core import HCICoordinator, HCISock, HCIFilter, HCIWorker
+from bluetool.core import HCICoordinator, HCISock, HCIFilter, HCIWorker, HCITask
 from bluetool.bluez import ba2str
 import bluetool.bluez as bluez
 import bluetool.command as btcmd
 import bluetool.event as btevt
 
-class ResetWorker(HCIWorker):
+class ResetTask(HCITask):
     def __init__(self, hci_sock):
-        super(ResetWorker, self).__init__(hci_sock)
+        super(ResetTask, self).__init__(hci_sock)
 
-    def run(self):
+    def reset(self):
         cmd = btcmd.HCIReset()
         evt = self.send_hci_cmd_wait_cmd_complt(cmd)
         if evt.status != 0:
@@ -32,7 +30,7 @@ class ResetWorker(HCIWorker):
             return -1
         return 0
 
-class WhiteListMaster(HCIWorker, Process):
+class WhiteListMaster(HCIWorker):
     def __init__(self, hci_sock, peer_addr):
         super(WhiteListMaster, self).__init__(hci_sock)
         self.peer_addr = peer_addr
@@ -40,7 +38,7 @@ class WhiteListMaster(HCIWorker, Process):
     def run(self):
         self.set_hci_filter(HCIFilter(ptypes=bluez.HCI_EVENT_PKT).all_events())
 
-        if ResetWorker(self.sock).run() != 0:
+        if ResetTask(self.sock).reset() != 0:
             return
 
         cmd = btcmd.HCILEAddDeviceToWhiteList(0, self.peer_addr)
@@ -59,7 +57,7 @@ class WhiteListMaster(HCIWorker, Process):
         if evt.code == bluez.EVT_LE_META_EVENT and evt.subevt_code == bluez.EVT_LE_CONN_COMPLETE:
             print 'm: connect to {}'.format(ba2str(evt.peer_addr))
 
-class WhiteListSlave(HCIWorker, Process):
+class WhiteListSlave(HCIWorker):
     def __init__(self, hci_sock, peer_addr):
         super(WhiteListSlave, self).__init__(hci_sock)
         self.peer_addr = peer_addr
@@ -67,7 +65,7 @@ class WhiteListSlave(HCIWorker, Process):
     def run(self):
         self.set_hci_filter(HCIFilter(ptypes=bluez.HCI_EVENT_PKT).all_events())
 
-        if ResetWorker(self.sock).run() != 0:
+        if ResetTask(self.sock).reset() != 0:
             return
 
         cmd = btcmd.HCILESetAdvertisingParameters(0xA0, 0xA0, 0, 0, 0, '\x00'*6, 0x7, 0)
@@ -85,6 +83,12 @@ class WhiteListSlave(HCIWorker, Process):
         evt = self.recv_hci_evt()
         if evt.code == bluez.EVT_LE_META_EVENT and evt.subevt_code == bluez.EVT_LE_CONN_COMPLETE:
             print 's: connect to {}'.format(ba2str(evt.peer_addr))
+
+        cmd = btcmd.HCILESetAdvertiseEnable(0)
+        evt = self.send_hci_cmd_wait_cmd_complt(cmd)
+        if evt.status != 0:
+            print 's: cannot disable advertising: {}'.format(evt.status)
+
 
 class WhiteListTester(HCICoordinator):
     def __init__(self):
