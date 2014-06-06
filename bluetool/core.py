@@ -141,9 +141,9 @@ class HCITask(object):
         return evt
 
 class HCIWorker(HCITask, mp.Process):
-    def __init__(self, hci_sock, conn=None):
-        super(HCIManagedWorker, self).__init__(hci_sock)
-        self.conn = conn
+    def __init__(self, hci_sock, pipe):
+        super(HCIWorker, self).__init__(hci_sock)
+        self.pipe = pipe
         self.event = mp.Event()
 
     def wait(self):
@@ -154,10 +154,10 @@ class HCIWorker(HCITask, mp.Process):
         self.event.set()
 
     def send(self, obj):
-        self.conn.send(obj)
+        self.pipe.send(obj)
 
     def recv(self):
-        return self.conn.recv()
+        return self.pipe.recv()
 
 class ReadBDAddrTask(HCITask):
     def __init__(self, hci_sock):
@@ -165,17 +165,34 @@ class ReadBDAddrTask(HCITask):
 
     def read_bd_addr(self):
         cmd = HCIReadBDAddr()
-        evt = self.send_hci_cmd_wait_cmd_complt()
+        evt = self.send_hci_cmd_wait_cmd_complt(cmd)
         return evt.bd_addr
 
+class HCIWorkerProxy(object):
+    def __init__(self, dev_id, worker_type, *args):
+        self.sock = HCISock(dev_id)
+        self.bd_addr = ReadBDAddrTask(self.sock).read_bd_addr()
+        self.pipe, pipe = mp.Pipe()
+        self.worker = worker_type(self.sock, pipe, *args)
+
+    def signal(self):
+        self.worker.signal()
+
+    def send(self, obj):
+        self.pipe.send(obj)
+
+    def recv(self):
+        return self.pipe.recv()
+
+    def start(self):
+        self.worker.start()
+
+    def join(self):
+        self.worker.join()
+
 class HCICoordinator(object):
-    def __init__(self, *args):
+    def __init__(self):
         super(HCICoordinator, self).__init__()
-        self.sock = [None]*len(args)
-        self.bd_addr = [None]*len(args)
-        for i in xrange(0, len(args)):
-            self.sock[i] = HCISock(args[i])
-            self.bd_addr[i] = ReadBDAddrTask(self.sock[i]).read_bd_addr()
 
     def main(self):
         raise NotImplementedError

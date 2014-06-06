@@ -46,6 +46,14 @@ class HCIInquiry(HCILinkControlCommand):
                     htole8(self.inquiry_len),
                     htole8(self.num_responses)))
 
+class HCIDisconnect(HCILinkControlCommand):
+    def __init__(self, conn_handle, reason):
+        super(HCIDisconnect, self).__init__(bluez.OCF_DISCONNECT)
+        self.conn_handle = conn_handle
+        self.reason = reason
+
+    def pack_param(self):
+        return ''.join((htole16(self.conn_handle), htole8(self.reason)))
  
 class HCIControllerCommand(HCICommand):
     def __init__(self, ocf):

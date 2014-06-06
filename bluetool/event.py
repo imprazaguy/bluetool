@@ -28,6 +28,17 @@ class InquiryCompleteEvent(HCIEvent):
     def unpack_param(self, buf, offset):
         self.status = letoh8(buf, offset)
 
+class DisconnectionCompleteEvent(HCIEvent):
+    def __init__(self):
+        super(DisconnectionCompleteEvent, self).__init__(bluez.EVT_DISCONN_COMPLETE)
+
+    def unpack_param(self, buf, offset):
+        self.status = letoh8(buf, offset)
+        offset += 1
+        self.conn_handle = letoh16(buf, offset)
+        offset += 2
+        self.reason = letoh8(buf, offset)
+
 def _parse_cmd_complt_evt_param_status(evt, buf, offset):
     evt.status = letoh8(buf, offset)
 
@@ -143,6 +154,7 @@ class LEConnectionCompleteEvent(LEMetaEvent):
 
 _evt_table = {
         bluez.EVT_INQUIRY_COMPLETE: InquiryCompleteEvent,
+        bluez.EVT_DISCONN_COMPLETE: DisconnectionCompleteEvent,
         bluez.EVT_CMD_COMPLETE: CommandCompleteEvent,
         bluez.EVT_CMD_STATUS: CommandStatusEvent,
         bluez.EVT_INQUIRY_RESULT_WITH_RSSI: InquiryResultWithRSSIEvent,
