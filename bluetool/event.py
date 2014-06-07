@@ -1,6 +1,7 @@
 """HCI event.
 """
 from . import bluez
+from .error import HCIParseError
 from .utils import letoh8, letohs8, letoh16, letoh24
 
 class HCIEventParseError(Exception):
@@ -12,6 +13,7 @@ class HCIEventParseError(Exception):
 
 class HCIEvent(object):
     def __init__(self, code):
+        super(HCIEvent, self).__init__()
         self.code = code
 
     def unpack_param(self, buf, offset=0):
@@ -20,6 +22,29 @@ class HCIEvent(object):
     @staticmethod
     def get_pkt_size(buf, offset=0):
         return 2 + letoh8(buf, offset + 1)
+
+    @staticmethod
+    def parse(buf, offset=0):
+        """Parse HCI event.
+        
+        offset is the start offset of event packet.
+        """
+        avail_len = len(buf) - offset
+        code = letoh8(buf, offset)
+        offset += 1
+        plen = letoh8(buf, offset)
+        offset += 1
+        if avail_len  < 2 + plen:
+            raise HCIParseError('not enough data to parse')
+        if code == bluez.EVT_LE_META_EVENT:
+            le_code = letoh8(buf, offset)
+            offset += 1
+            evt = _le_evt_table[le_code]()
+        else:
+            evt = _evt_table[code]()
+        evt.unpack_param(buf, offset)
+        return evt
+
 
 class InquiryCompleteEvent(HCIEvent):
     def __init__(self):

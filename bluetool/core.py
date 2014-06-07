@@ -4,31 +4,29 @@ import multiprocessing as mp
 
 from . import bluez
 from .command import HCICommand, HCIReadBDAddr
-from .event import HCIEvent, parse_hci_event
 from .data import HCIACLData, HCISCOData
+from .error import HCIError
+from .event import HCIEvent
+from .utils import letoh8
 
 
-class HCIError(Exception):
-    def __init__(self, msg):
-        self.msg = msg
-
-    def __str__(self):
-        return repr(self.msg)
+_pkt_table = {
+        bluez.HCI_COMMAND_PKT: HCICommand,
+        bluez.HCI_ACLDATA_PKT: HCIACLData,
+        bluez.HCI_SCODATA_PKT: HCISCOData,
+        bluez.HCI_EVENT_PKT: HCIEvent,
+}
 
 def get_hci_pkt_size(buf, offset=0):
-    ptype = ord(buf[offset])
+    ptype = letoh8(buf, offset)
     offset += 1
-    if ptype == bluez.HCI_COMMAND_PKT:
-        pkt_size = HCICommand.get_pkt_size(buf, offset)
-    elif ptype == bluez.HCI_ACLDATA_PKT:
-        pkt_size = HCIACLData.get_pkt_size(buf, offset)
-    elif ptype == bluez.HCI_SCODATA_PKT:
-        pkt_size = HCISCOData.get_pkt_size(buf, offset)
-    elif ptype == bluez.HCI_EVENT_PKT:
-        pkt_size = HCIEvent.get_pkt_size(buf, offset)
-    else:
-        raise HCIError('unknown ptype: 0x{:02x}'.format(ptype))
-    return pkt_size
+    return 1 + _pkt_table[ptype].get_pkt_size(buf, offset)
+
+def parse_hci_pkt(buf, offset=0):
+    ptype = letoh8(buf, offset)
+    offset += 1
+    pkt = _pkt_table[ptype].parse(buf, offset)
+    return (ptype, pkt)
 
 class HCIFilter(object):
     def __init__(self, obj=None, ptypes=None, events=None, opcode=None):
@@ -87,22 +85,23 @@ class HCISock(object):
     def set_hci_filter(self, flt):
         self.sock.setsockopt(bluez.SOL_HCI, bluez.HCI_FILTER, flt.obj)
 
-    def has_hci_pkt_in_buf(self):
-        if len(self.rbuf) == 0:
-            return False
-        if get_hci_pkt_size(self.rbuf) > len(self.rbuf):
-            return False
-        return True
-
-    def recv_hci_evt(self):
-        while not self.has_hci_pkt_in_buf():
+    def recv_hci_pkt(self):
+        while True:
+            if len(self.rbuf) > 0:
+                pkt_size = get_hci_pkt_size(self.rbuf)
+                if pkt_size <= len(self.rbuf):
+                    break
             buf = self.sock.recv(1024)
             self.rbuf = ''.join((self.rbuf, buf))
-        ptype = ord(self.rbuf[0])
-        evt_code = ord(self.rbuf[1])
-        plen = ord(self.rbuf[2])
-        evt = parse_hci_event(evt_code, self.rbuf, 3)
-        self.rbuf = self.rbuf[3+plen:]
+
+        pkt = parse_hci_pkt(self.rbuf)
+        self.rbuf = self.rbuf[pkt_size:]
+        return pkt
+
+    def recv_hci_evt(self):
+        ptype, evt = self.recv_hci_pkt()
+        if ptype != bluez.HCI_EVENT_PKT:
+            raise HCIError('does not receive an event')
         return evt
 
 class HCITask(object):

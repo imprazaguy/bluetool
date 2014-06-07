@@ -28,6 +28,10 @@ class HCICommand(object):
     def get_pkt_size(buf, offset=0):
         return 3 + letoh8(buf, offset + 2)
 
+    @staticmethod
+    def parse(buf, offset=0):
+        raise NotImplementedError
+
 
 class HCILinkControlCommand(HCICommand):
     def __init__(self, ocf):
