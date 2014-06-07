@@ -175,6 +175,10 @@ class HCILECreateConnection(HCILEControllerCommand):
                     htole16(self.min_ce_len),
                     htole16(self.max_ce_len)))
 
+class HCILECreateConnectionCancel(HCILEControllerCommand):
+    def __init__(self):
+        super(HCILECreateConnectionCancel, self).__init__(bluez.OCF_LE_CREATE_CONN_CANCEL)
+
 class HCILEReadWhiteListSize(HCILEControllerCommand):
     def __init__(self):
         super(HCILEReadWhiteListSize, self).__init__(

@@ -4,12 +4,6 @@ from . import bluez
 from .error import HCIParseError
 from .utils import letoh8, letohs8, letoh16, letoh24
 
-class HCIEventParseError(Exception):
-    def __init__(self, msg=None):
-        self.msg = msg
-
-    def __str__(self):
-        return repr(self.msg)
 
 class HCIEvent(object):
     def __init__(self, code):
@@ -90,6 +84,7 @@ _cmd_complt_evt_param_parser = {
         0x1009: _parse_cmd_complt_evt_param_read_bd_addr,
         0x2006: _parse_cmd_complt_evt_param_status,
         0x200a: _parse_cmd_complt_evt_param_status,
+        0x200e: _parse_cmd_complt_evt_param_status,
         0x200f: _parse_cmd_complt_evt_param_read_white_list_size,
         0x2010: _parse_cmd_complt_evt_param_status,
         0x2011: _parse_cmd_complt_evt_param_status,

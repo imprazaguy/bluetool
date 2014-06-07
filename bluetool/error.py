@@ -6,6 +6,7 @@ class Error(Exception):
     def __str__(self):
         return repr(self.msg)
 
+
 class HCIError(Error):
     def __init__(self, msg=''):
         super(HCIError, self).__init__(msg)
@@ -25,3 +26,8 @@ class HCICommandError(HCIError):
                 '{} failure: opcode: 0x{:04x}, status: 0x{:02x}'.format(
                     hci_evt.__class__.__name__, hci_evt.cmd_opcode,
                     hci_evt.status))
+
+
+class TestError(Error):
+    def __init__(self, msg):
+        super(TestError, self).__init__(msg)
