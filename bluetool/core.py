@@ -1,6 +1,7 @@
 """Core module for HCI operations.
 """
 import multiprocessing as mp
+import select
 
 from . import bluez
 from .command import HCICommand, HCIReadBDAddr
@@ -70,8 +71,17 @@ class HCISock(object):
     def __init__(self, dev_id):
         super(HCISock, self).__init__()
         self.sock = bluez.hci_open_dev(dev_id)
+        self.poll = select.poll()
+        self.poll.register(self.sock, (select.POLLIN | select.POLLPRI))
         self.rbuf = ''
+
+    def __del__(self):
+        self.poll.unregister(self.sock)
+        self.sock.close()
     
+    def fileno(self):
+        return self.sock.fileno()
+
     def send_hci_cmd(self, cmd):
         param = cmd.pack_param()
         if param is not None:
@@ -85,12 +95,20 @@ class HCISock(object):
     def set_hci_filter(self, flt):
         self.sock.setsockopt(bluez.SOL_HCI, bluez.HCI_FILTER, flt.obj)
 
-    def recv_hci_pkt(self):
+    def recv_hci_pkt(self, timeout=None):
+        """Receive a HCI packet.
+
+        This method waits for timeout milliseconds to receive a packet. If the
+        time is out, it returns None. timeout is ignored if timeout is None.
+        """
         while True:
             if len(self.rbuf) > 0:
                 pkt_size = get_hci_pkt_size(self.rbuf)
                 if pkt_size <= len(self.rbuf):
                     break
+            if timeout is not None:
+                if len(self.poll.poll(timeout)) == 0:
+                    return None
             buf = self.sock.recv(1024)
             self.rbuf = ''.join((self.rbuf, buf))
 
@@ -98,10 +116,10 @@ class HCISock(object):
         self.rbuf = self.rbuf[pkt_size:]
         return pkt
 
-    def recv_hci_evt(self):
-        ptype, evt = self.recv_hci_pkt()
+    def recv_hci_evt(self, timeout=None):
+        ptype, evt = self.recv_hci_pkt(timeout)
         if ptype != bluez.HCI_EVENT_PKT:
-            raise HCIError('does not receive an event')
+            raise HCIError('not an event (ptype: {})'.format(ptype))
         return evt
 
 class HCITask(object):
@@ -118,8 +136,11 @@ class HCITask(object):
     def set_hci_filter(self, flt):
         self.sock.set_hci_filter(flt)
 
-    def recv_hci_evt(self):
-        return self.sock.recv_hci_evt()
+    def recv_hci_pkt(self, timeout=None):
+        return self.scok.recv_hci_pkt(timeout)
+
+    def recv_hci_evt(self, timeout=None):
+        return self.sock.recv_hci_evt(timeout)
 
     def send_hci_cmd_wait_cmd_complt(self, cmd):
         old_flt = self.get_hci_filter()
