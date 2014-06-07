@@ -1,12 +1,13 @@
 """Core module for HCI operations.
 """
+import logging
 import multiprocessing as mp
 import select
 
 from . import bluez
 from .command import HCICommand, HCIReadBDAddr
 from .data import HCIACLData, HCISCOData
-from .error import HCIError
+from .error import HCIParseError, HCITimeoutError
 from .event import HCIEvent
 from .utils import letoh8
 
@@ -99,7 +100,8 @@ class HCISock(object):
         """Receive a HCI packet.
 
         This method waits for timeout milliseconds to receive a packet. If the
-        time is out, it returns None. timeout is ignored if timeout is None.
+        time is out, it raises HCITimeoutError exception. timeout is ignored
+        if timeout is None.
         """
         while True:
             if len(self.rbuf) > 0:
@@ -108,7 +110,7 @@ class HCISock(object):
                     break
             if timeout is not None:
                 if len(self.poll.poll(timeout)) == 0:
-                    return None
+                    raise HCITimeoutError
             buf = self.sock.recv(1024)
             self.rbuf = ''.join((self.rbuf, buf))
 
@@ -119,7 +121,7 @@ class HCISock(object):
     def recv_hci_evt(self, timeout=None):
         ptype, evt = self.recv_hci_pkt(timeout)
         if ptype != bluez.HCI_EVENT_PKT:
-            raise HCIError('not an event (ptype: {})'.format(ptype))
+            raise HCIParseError('not an event: ptype: {})'.format(ptype))
         return evt
 
 class HCITask(object):
@@ -165,6 +167,8 @@ class HCIWorker(HCITask, mp.Process):
         super(HCIWorker, self).__init__(hci_sock)
         self.pipe = pipe
         self.event = mp.Event()
+        self.log = mp.log_to_stderr()
+        self.log.setLevel(logging.INFO)
 
     def wait(self):
         self.event.wait()
@@ -213,6 +217,8 @@ class HCIWorkerProxy(object):
 class HCICoordinator(object):
     def __init__(self):
         super(HCICoordinator, self).__init__()
+        self.log = mp.log_to_stderr()
+        self.log.setLevel(logging.INFO)
 
     def main(self):
         raise NotImplementedError
