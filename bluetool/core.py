@@ -2,7 +2,9 @@
 """
 import logging
 import multiprocessing as mp
+import os
 import select
+import signal
 
 from . import bluez
 from .command import HCICommand, HCIReadBDAddr
@@ -163,12 +165,28 @@ class HCITask(object):
         return evt
 
 class HCIWorker(HCITask, mp.Process):
-    def __init__(self, hci_sock, pipe):
+    def __init__(self, hci_sock, coord, pipe):
         super(HCIWorker, self).__init__(hci_sock)
+        self.coord = coord
         self.pipe = pipe
         self.event = mp.Event()
         self.log = mp.log_to_stderr()
         self.log.setLevel(logging.INFO)
+
+    def run(self):
+        try:
+            self.main()
+        except Exception:
+            self.coord.put_terminated_worker(self.pid)
+            os.kill(self.coord.pid, signal.SIGINT)
+            raise
+
+    def main(self):
+        """Main function of worker object.
+        
+        Subclass should implement this method to provide main function.
+        """
+        raise NotImplementedError
 
     def wait(self):
         self.event.wait()
@@ -193,11 +211,11 @@ class ReadBDAddrTask(HCITask):
         return evt.bd_addr
 
 class HCIWorkerProxy(object):
-    def __init__(self, dev_id, worker_type, *args):
+    def __init__(self, dev_id, coord, worker_type, *args):
         self.sock = HCISock(dev_id)
         self.bd_addr = ReadBDAddrTask(self.sock).read_bd_addr()
         self.pipe, pipe = mp.Pipe()
-        self.worker = worker_type(self.sock, pipe, *args)
+        self.worker = worker_type(self.sock, coord, pipe, *args)
 
     def signal(self):
         self.worker.signal()
@@ -217,9 +235,42 @@ class HCIWorkerProxy(object):
 class HCICoordinator(object):
     def __init__(self):
         super(HCICoordinator, self).__init__()
+        self.worker = []
         self.log = mp.log_to_stderr()
         self.log.setLevel(logging.INFO)
+        self.pid = os.getpid()
+        self.term_worker_queue = mp.Queue()
+
+    def run(self):
+        for w in self.worker:
+            w.start()
+        try:
+            self.main()
+        except KeyboardInterrupt:
+            term_workers = self.get_terminated_workers()
+            for w in self.workers:
+                if w.pid not in term_workers:
+                    w.terminate()
+        for w in self.worker:
+            w.join()
+
+    def get_terminated_workers(self):
+        """Get pids of terminated workers."""
+        workers = set()
+        workers.add(self.term_worker_queue.get())
+        # Just make sure get one pid of terminated workers. If more than
+        # one pid are put into queue, we don't care missing them.
+        while not self.term_worker_queue.empty():
+            workers.add(self.term_worker_queue.get_nowait())
+        return workers
+
+    def put_terminated_worker(self, pid):
+        self.term_worker_queue.put(pid)
 
     def main(self):
+        """Main function of coordinator object.
+        
+        Subclass should implement this method to provide main function.
+        """
         raise NotImplementedError
 

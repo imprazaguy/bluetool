@@ -31,11 +31,11 @@ class ResetTask(HCITask):
             raise HCICommandError(evt)
 
 class WhiteListMaster(HCIWorker):
-    def __init__(self, hci_sock, pipe, peer_addr=None):
+    def __init__(self, hci_sock, coord, pipe, peer_addr=None):
         super(WhiteListMaster, self).__init__(hci_sock, pipe)
         self.peer_addr = peer_addr
 
-    def run(self):
+    def main(self):
         self.set_hci_filter(HCIFilter(ptypes=bluez.HCI_EVENT_PKT).all_events())
 
         try:
@@ -126,11 +126,11 @@ class WhiteListMaster(HCIWorker):
             raise HCICommandError(evt)
 
 class WhiteListSlave(HCIWorker):
-    def __init__(self, hci_sock, pipe, peer_addr=None):
-        super(WhiteListSlave, self).__init__(hci_sock, pipe)
+    def __init__(self, hci_sock, coord, pipe, peer_addr=None):
+        super(WhiteListSlave, self).__init__(hci_sock, coord, pipe)
         self.peer_addr = peer_addr
 
-    def run(self):
+    def main(self):
         self.set_hci_filter(HCIFilter(ptypes=bluez.HCI_EVENT_PKT).all_events())
 
         try:
@@ -208,16 +208,13 @@ class WhiteListSlave(HCIWorker):
 class WhiteListTester(HCICoordinator):
     def __init__(self):
         super(WhiteListTester, self).__init__()
-        self.worker = [None]*2
-        self.worker[0] = HCIWorkerProxy(0, WhiteListMaster)
-        self.worker[1] = HCIWorkerProxy(1, WhiteListSlave)
+        self.worker.append(HCIWorkerProxy(0, self, WhiteListMaster))
+        self.worker.append(HCIWorkerProxy(1, self, WhiteListSlave))
         self.worker[0].worker.peer_addr = self.worker[1].bd_addr
         self.worker[1].worker.peer_addr = self.worker[0].bd_addr
 
     def main(self):
         print 'master[{}], slave[{}]'.format(ba2str(self.worker[0].bd_addr), ba2str(self.worker[1].bd_addr))
-        for w in self.worker:
-            w.start()
         
         n_run = 10
         n_case1_success = 0
@@ -248,10 +245,8 @@ class WhiteListTester(HCICoordinator):
         print 'case 1 #success: {}/{}'.format(n_case1_success, n_run)
         print 'case 2 #success: {}/{}'.format(n_case2_success, n_run)
 
-        for w in self.worker:
-            w.join()
 
 if __name__ == "__main__":
     tester = WhiteListTester()
-    tester.main()
+    tester.run()
 
