@@ -113,6 +113,21 @@ class CommandStatusEvent(HCIEvent):
         offset += 1
         self.cmd_opcode = letoh16(buf, offset)
 
+class NumberOfCompletedPacketsEvent(HCIEvent):
+    def __init__(self):
+        super(NumberOfCompletedPacketsEvent, self).__init__(bluez.EVT_NUM_COMP_PKTS)
+
+    def unpack_param(self, buf, offset):
+        self.num_handles = letoh8(buf, offset)
+        offset += 1
+        self.conn_handle = [0]*self.num_handles
+        self.num_completed_pkts = [0]*self.num_handles
+        for i in xrange(0, self.num_handles):
+            self.conn_handle[i] = letoh16(buf, offset)
+            offset += 2
+            self.num_completed_pkts[i] = letoh16(buf, offset)
+            offset += 2
+
 class InquiryResultWithRSSIEvent(HCIEvent):
     def __init__(self):
         super(InquiryResultWithRSSIEvent, self).__init__(
@@ -177,6 +192,7 @@ _evt_table = {
         bluez.EVT_DISCONN_COMPLETE: DisconnectionCompleteEvent,
         bluez.EVT_CMD_COMPLETE: CommandCompleteEvent,
         bluez.EVT_CMD_STATUS: CommandStatusEvent,
+        bluez.EVT_NUM_COMP_PKTS: NumberOfCompletedPacketsEvent,
         bluez.EVT_INQUIRY_RESULT_WITH_RSSI: InquiryResultWithRSSIEvent,
 }
 

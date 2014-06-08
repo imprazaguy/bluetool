@@ -151,7 +151,10 @@ class HCITask(object):
         self.set_hci_filter(HCIFilter(ptypes=bluez.HCI_EVENT_PKT,
             events=bluez.EVT_CMD_COMPLETE, opcode=cmd.opcode))
         self.send_hci_cmd(cmd)
-        evt = self.recv_hci_evt()
+        while True:
+            evt = self.recv_hci_evt()
+            if evt.code == bluez.EVT_CMD_COMPLETE:
+                break
         self.set_hci_filter(old_flt)
         return evt
 
@@ -160,18 +163,24 @@ class HCITask(object):
         self.set_hci_filter(HCIFilter(ptypes=bluez.HCI_EVENT_PKT,
             events=bluez.EVT_CMD_STATUS))
         self.send_hci_cmd(cmd)
-        evt = self.recv_hci_evt()
+        while True:
+            evt = self.recv_hci_evt()
+            if evt.code == bluez.EVT_CMD_STATUS:
+                break
         self.set_hci_filter(old_flt)
         return evt
 
+_logger = mp.log_to_stderr()
+_logger.setLevel(logging.INFO)
+
 class HCIWorker(HCITask, mp.Process):
+    log = _logger
+
     def __init__(self, hci_sock, coord, pipe):
         super(HCIWorker, self).__init__(hci_sock)
         self.coord = coord
         self.pipe = pipe
         self.event = mp.Event()
-        self.log = mp.log_to_stderr()
-        self.log.setLevel(logging.INFO)
 
     def run(self):
         try:
@@ -217,6 +226,10 @@ class HCIWorkerProxy(object):
         self.pipe, pipe = mp.Pipe()
         self.worker = worker_type(self.sock, coord, pipe, *args)
 
+    @property
+    def pid(self):
+        return self.worker.pid
+
     def signal(self):
         self.worker.signal()
 
@@ -232,12 +245,13 @@ class HCIWorkerProxy(object):
     def join(self):
         self.worker.join()
 
+    def terminate(self):
+        self.worker.terminate()
+
 class HCICoordinator(object):
     def __init__(self):
         super(HCICoordinator, self).__init__()
         self.worker = []
-        self.log = mp.log_to_stderr()
-        self.log.setLevel(logging.INFO)
         self.pid = os.getpid()
         self.term_worker_queue = mp.Queue()
 
@@ -248,7 +262,7 @@ class HCICoordinator(object):
             self.main()
         except KeyboardInterrupt:
             term_workers = self.get_terminated_workers()
-            for w in self.workers:
+            for w in self.worker:
                 if w.pid not in term_workers:
                     w.terminate()
         for w in self.worker:

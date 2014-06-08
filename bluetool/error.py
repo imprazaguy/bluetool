@@ -22,7 +22,7 @@ class HCITimeoutError(HCIError):
 
 class HCICommandError(HCIError):
     def __init__(self, hci_evt):
-        super(HCIStatusError, self).__init__(
+        super(HCICommandError, self).__init__(
                 '{} failure: opcode: 0x{:04x}, status: 0x{:02x}'.format(
                     hci_evt.__class__.__name__, hci_evt.cmd_opcode,
                     hci_evt.status))
