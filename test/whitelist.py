@@ -8,6 +8,8 @@ import bluetool.bluez as bluez
 import bluetool.command as btcmd
 import bluetool.event as btevt
 
+IDLE_TIME_MS = 5000
+
 class LEHelper(HCITask):
     def __init__(self, hci_sock):
         super(LEHelper, self).__init__(hci_sock)
@@ -40,7 +42,7 @@ class LEHelper(HCITask):
         if evt.status != 0:
             raise HCICommandError(evt)
 
-    def create_connect_by_white_list(self, conn_intvl, timeout):
+    def create_connect_by_white_list(self, conn_intvl):
         cmd = btcmd.HCILECreateConnection(96, 24, 1, 0, '\x00'*6, 0, conn_intvl, conn_intvl, 0, 100, 0, 0)
         evt = self.send_hci_cmd_wait_cmd_status(cmd)
         if evt.status != 0:
@@ -58,8 +60,8 @@ class LEHelper(HCITask):
         if evt.status != 0:
             raise HCICommandError(evt)
 
-    def start_advertising(self):
-        cmd = btcmd.HCILESetAdvertisingParameters(0xA0, 0xA0, 0, 0, 0, '\x00'*6, 0x7, 0)
+    def start_advertising(self, intvl):
+        cmd = btcmd.HCILESetAdvertisingParameters(intvl, intvl, 0, 0, 0, '\x00'*6, 0x7, 0)
         evt = self.send_hci_cmd_wait_cmd_complt(cmd)
         if evt.status != 0:
             raise HCICommandError(evt)
@@ -75,19 +77,20 @@ class LEHelper(HCITask):
         if evt.status != 0:
             raise HCICommandError(evt)
 
-    def wait_connection_complete(self):
+    def wait_connection_complete(self, timeout=None):
         while True:
-            evt = self.recv_hci_evt()
+            evt = self.recv_hci_evt(timeout)
             if evt.code == bluez.EVT_LE_META_EVENT and evt.subevt_code == bluez.EVT_LE_CONN_COMPLETE:
                 return evt
             else:
                 self.log.info('ignore event: %d', evt.code)
 
-    def wait_disconnection_complete(self):
+    def wait_disconnection_complete(self, conn_handle=None):
         while True:
             evt = self.recv_hci_evt()
             if evt.code == bluez.EVT_DISCONN_COMPLETE:
-                return evt
+                if conn_handle is None or conn_handle == evt.conn_handle:
+                    return evt
             else:
                 self.log.info('ignore event: %d', evt.code)
 
@@ -102,6 +105,7 @@ class WhiteListMaster(HCIWorker):
 
         try:
             helper.reset()
+            helper.add_device_to_white_list(0, '\xa5\xa4\xa3\xa2\xa1\xa0')
         except HCICommandError as err:
             self.log.warning('cannot reset', exc_info=True)
             return
@@ -114,10 +118,20 @@ class WhiteListMaster(HCIWorker):
             # Case 1: Test initiator connects to an advertiser with bd_addr in white list.
             try:
                 helper.add_device_to_white_list(0, self.peer_addr)
-                self.test_create_connect_by_white_list(None)
+                helper.create_connect_by_white_list(12)
+                evt = helper.wait_connection_complete()
+                if evt.status != 0:
+                    raise TestError('connection fail: status: 0x{:02x}'.format(evt.status))
+                self.conn_handle = evt.conn_handle
+                self.log.info('connect to %s', ba2str(evt.peer_addr))
+
+                time.sleep(1)
+
+                helper.disconnect(self.conn_handle, 0x13)
+                helper.wait_disconnection_complete(self.conn_handle)
                 helper.remove_device_from_white_list(0, self.peer_addr)
                 succeeded = True
-            except HCICommandError:
+            except (HCICommandError, TestError):
                 self.log.warning('fail to create connection by white list', exc_info=True)
                 succeeded = False
             self.send(succeeded)
@@ -126,54 +140,23 @@ class WhiteListMaster(HCIWorker):
             # Case 2: Test initiator connects to an advertiser with bd_addr not in white list.
             try:
                 try:
-                    self.test_create_connect_by_white_list(3000)
-                    raise TestError('connect to device not in white list')
+                    helper.create_connect_by_white_list(12)
+                    evt = helper.wait_connection_complete(IDLE_TIME_MS)
+                    if evt.status == 0 and evt.peer_addr == self.peer_addr:
+                        helper.disconnect(evt.conn_handle, 0x13)
+                        helper.wait_disconnection_complete(evt.conn_handle)
+                        raise TestError('connect to device not in white list')
                 except HCITimeoutError:
                     pass
                 helper.create_connect_cancel()
-                while True:
-                    evt = self.recv_hci_evt()
-                    if evt.code == bluez.EVT_LE_META_EVENT and evt.subevt_code == bluez.EVT_LE_CONN_COMPLETE:
-                        if evt.status != 0x02:
-                            raise TestError('create connection cancel fail: status: 0x{:02x}'.format(evt.status))
-                        break                
+                evt = helper.wait_connection_complete()
+                if evt.status != 0x02:
+                    raise TestError('create connection cancel fail: status: 0x{:02x}'.format(evt.status))
                 succeeded = True
             except (HCICommandError, TestError):
                 self.log.warning('fail to prohibit connection creation by white list', exc_info=True)
                 succeeded = False
             self.send(succeeded)
-
-    def test_create_connect_by_white_list(self, timeout):
-        cmd = btcmd.HCILECreateConnection(96, 24, 1, 0, '\x00'*6, 0, 6, 12, 0, 100, 0, 0)
-        evt = self.send_hci_cmd_wait_cmd_status(cmd)
-        if evt.status != 0:
-            raise HCICommandError(evt)
-
-        self.conn_handle = -1
-        while True:
-            evt = self.recv_hci_evt(timeout)
-            if evt.code == bluez.EVT_LE_META_EVENT and evt.subevt_code == bluez.EVT_LE_CONN_COMPLETE:
-                if evt.status != 0:
-                    raise TestError('connection fail: status: 0x{:02x}'.format(evt.status))
-                self.conn_handle = evt.conn_handle
-                self.log.info('connect to %s', ba2str(evt.peer_addr))
-                break
-            else:
-                self.log.info('ignore event: %d', evt.code)
-
-        time.sleep(1)
-
-        cmd = btcmd.HCIDisconnect(self.conn_handle, 0x13)
-        evt = self.send_hci_cmd_wait_cmd_status(cmd)
-        if evt.status != 0:
-            raise HCICommandError(evt)
-
-        while True:
-            evt = self.recv_hci_evt()
-            if evt.code == bluez.EVT_DISCONN_COMPLETE and evt.conn_handle == self.conn_handle:
-                break
-            else:
-                self.log.info('ignore event: %d', evt.code)
 
 class WhiteListSlave(HCIWorker):
     def __init__(self, hci_sock, coord, pipe, peer_addr=None):
@@ -197,8 +180,15 @@ class WhiteListSlave(HCIWorker):
 
             # Case 1: Test connect to an initiator with advertiser's bd_addr in white list.
             try:
-                self.test_connect_initiator(None)
-                self.wait_disconnection()
+                helper.start_advertising(0xA0)
+                evt = helper.wait_connection_complete()
+                if evt.status != 0:
+                    raise TestError('connection fail: status: 0x{:02x}'.format(evt.status))
+                self.conn_handle = evt.conn_handle
+                self.log.info('connect to %s', ba2str(evt.peer_addr))
+                helper.stop_advertising()
+
+                helper.wait_disconnection_complete(self.conn_handle)
                 succeeded = True
             except HCICommandError:
                 self.log.warning('fail to connect to initiator', exc_info=True)
@@ -209,53 +199,20 @@ class WhiteListSlave(HCIWorker):
             # Case 2: Test connect to an initiator without advertiser's bd_addr in white list.
             try:
                 try:
-                    self.test_connect_initiator(3000)
-                    raise TestError('device not in white list connects to initiator')
+                    helper.start_advertising(0xA0)
+                    evt = helper.wait_connection_complete(IDLE_TIME_MS)
+                    if evt.status == 0:
+                        helper.wait_disconnection_complete(evt.conn_handle)
+                        raise TestError('device not in white list connects to initiator')
                 except HCITimeoutError:
                     pass
-                helper.stop_advertising()
+                finally:
+                    helper.stop_advertising()
                 succeeded = True
-            except HCICommandError:
+            except (HCICommandError, TestError):
                 self.log.warning('fail to prohibit connection creation by white list', exc_info=True)
                 succeeded = False
             self.send(succeeded)
-
-
-    def test_connect_initiator(self, timeout):
-        cmd = btcmd.HCILESetAdvertisingParameters(0xA0, 0xA0, 0, 0, 0, '\x00'*6, 0x7, 0)
-        evt = self.send_hci_cmd_wait_cmd_complt(cmd)
-        if evt.status != 0:
-            raise HCICommandError(evt)
-
-        cmd = btcmd.HCILESetAdvertiseEnable(1)
-        evt = self.send_hci_cmd_wait_cmd_complt(cmd)
-        if evt.status != 0:
-            raise HCICommandError(evt)
-
-        self.conn_handle = -1
-        while True:
-            evt = self.recv_hci_evt(timeout)
-            if evt.code == bluez.EVT_LE_META_EVENT and evt.subevt_code == bluez.EVT_LE_CONN_COMPLETE:
-                if evt.status != 0:
-                    raise TestError('connection fail: status: 0x{:02x}'.format(evt.status))
-                self.conn_handle = evt.conn_handle
-                self.log.info('connect to %s', ba2str(evt.peer_addr))
-                break
-            else:
-                self.log.info('ignore event: %d', evt.code)
-
-        cmd = btcmd.HCILESetAdvertiseEnable(0)
-        evt = self.send_hci_cmd_wait_cmd_complt(cmd)
-        if evt.status != 0:
-            raise HCICommandError(evt)
-
-    def wait_disconnection(self):
-        while True:
-            evt = self.recv_hci_evt()
-            if evt.code == bluez.EVT_DISCONN_COMPLETE and evt.conn_handle == self.conn_handle:
-                break
-            else:
-                self.log.info('ignore event: %d', evt.code)
 
 class WhiteListTester(HCICoordinator):
     def __init__(self):
