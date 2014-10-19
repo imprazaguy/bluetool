@@ -85,7 +85,7 @@ PyDoc_STRVAR(bluez_ext_doc,
 static PyObject *bluez_ext_error;
 
 PyMODINIT_FUNC
-init_bluez_ext(void)
+initbluez_ext(void)
 {
     PyObject *m = Py_InitModule3("bluez_ext", bt_methods, bluez_ext_doc);
     if (m == NULL) {

@@ -1,8 +1,9 @@
 #ifndef BLUEZ_EXT_H_
 #define BLUEZ_EXT_H_
 
-#include <bluetooth/sdp.h>
 #include <Python.h>
+#include <bluetooth/sdp.h>
+#include <bluetooth/sdp_lib.h>
 
 #ifdef __cplusplus
 extern "C" {

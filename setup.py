@@ -1,46 +1,75 @@
 #!/usr/bin/env python
 from distutils.spawn import find_executable
 import os
+import subprocess
 import sys
 
 import ez_setup
 ez_setup.use_setuptools()
 from setuptools import setup, find_packages, Extension
 
-PKG_CONFIG = find_executable('pkg-config')
-if not PKG_CONFIG:
-    print >>sys.stderr, 'cannot find pkg-config'
-    sys.exit(1)
+class ProgramNotFoundError(Exception):
+    def __init__(self, progname):
+        self.progname = progname
 
-def pkg_config(pkg, **kwargs):
-    flag_map = {'-I': 'include_dirs', '-L': 'library_dirs', '-l': 'libraries'}
-    for token in commands.getoutput("pkg-config --libs --cflags %s" % ' '.join(packages)).split():
-        flag_type = token[:2]
-        if flag_map.has_key(flag_type):
-            kwargs.setdefault(flag_map.get(flag_type), []).append(token[2:])
+    def __str__(self):
+        return 'Faild to find program: {}'.format(self.progname)
+
+def find_program(prog, required=None):
+    exe_path = find_executable(prog)
+    if required and not exe_path:
+        raise ProgramNotFoundError(prog)
+    return exe_path
+
+PKG_CONFIG = find_program('pkg-config', True)
+
+def pkg_config(pkg):
+    return subprocess.check_output([PKG_CONFIG, '--cflags', '--libs', pkg]).split()
+
+def map_flags2dict(*args):
+    name_map = {
+            '-D': 'define_macros',
+            '-I': 'include_dirs',
+            '-L': 'library_dirs',
+            '-l': 'libraries'
+            }
+    flag_dict = {}
+    def set_flag_dict(flag):
+        flag_type = flag[:2]
+        if flag_type in name_map:
+            flag_dict.setdefault(name_map[flag_type], []).append(flag[2:])
         else:
-            kwargs.setdefault('extra_link_args', []).append(token)
-    # Remove duplicate
-    for k, v in kwargs.iteritems():
-        kwargs[k] = list(set(v))
-    return kwargs
+            flag_dict.setdefault('extra_link_args', []).append(flag)
 
-module = Extension('bluez_ext',
-        sources=['bluetool/bluez_ext.c'],
-        **pkg_config_flags)
+    for flags in args:
+        try:
+            for flag in flags:
+                set_flag_dict(flag)
+        except TypeError:
+            set_flag_dict(flags)
+
+    for k, v in flag_dict.iteritems():
+        flag_dict[k] = list(set(v))
+    return flag_dict
+
+bluez_flags = pkg_config('bluez')
 
 setup(name='bluetool',
         version='0.1',
-        install_requires=[
-            'PyBluez >= 0.18'
-            ],
-
-        packages=find_packages(),
-        ext_modules=[module],
-        
         author='Guan-Zhong Huang',
         author_email='imprazaguy@gmail.com',
         description='Bluetooth Test Tool',
-        licencse='MIT',
-        keywords='bluetooth'
+        license='MIT',
+        keywords='bluetooth',
+
+        install_requires=[
+            'PyBluez>=0.18'
+            ],
+
+        packages=find_packages(),
+        ext_modules=[
+            Extension('bluetool.bluez_ext',
+                sources=['bluetool/bluez_ext.c'],
+                **map_flags2dict(bluez_flags))
+            ],
         )
