@@ -1,19 +1,18 @@
-#include <Python.h>
+#include "bluez_ext.h"
+#include <bluetooth/bluetooth.h>
+#include <bluetooth/hci.h>
+#include <sys/uio.h>
 
-typedef struct {
-    uint16_t handle;
-    uint16_t dlen;
-} __attribute__((packed)) hci_acl_hdr;
-#define HCI_ACL_HDR_SIZE 4
+#define acl_flag_pack(pb, bc) ((pb) | ((bc) << 2))
 
-int hci_send_acl(int dd, uint16_t hdl, uint8_t pb_flag, uint8_t bc_flag, uint16_t dlen, void *data)
+int hci_send_acl(int dd, uint16_t handle, uint8_t pb_flag, uint8_t bc_flag, uint16_t dlen, void *data)
 {
     uint8_t type = HCI_ACLDATA_PKT;
     hci_acl_hdr ha;
     struct iovec iv[3];
     int ivn;
 
-    ha.handle = htobs(acl_data_hdl_pack(hdl, pb_flag, bc_flag));
+    ha.handle = htobs(acl_handle_pack(handle, acl_flag_pack(pb_flag, bc_flag)));
     ha.dlen = htobs(dlen);
 
     iv[0].iov_base = &type;
@@ -39,22 +38,23 @@ int hci_send_acl(int dd, uint16_t hdl, uint8_t pb_flag, uint8_t bc_flag, uint16_
 }
 
 static PyObject *
-bt_hci_send_cmd(PyObject *self, PyObject *args)
+bt_hci_send_acl(PyObject *self, PyObject *args)
 {
     PySocketSockObject *socko = NULL;
-    int err, plen = 0;
-    uint16_t ogf, ocf;
-    char *param = NULL;
+    uint16_t handle;
+    uint8_t pb_flag, bc_flag;
+    int err, dlen = 0;
+    char *data = NULL;
     int dd = 0;
     
-    if ( !PyArg_ParseTuple(args, "OHH|s#", &socko, &ogf, &ocf, &param, &plen)) {
+    if (!PyArg_ParseTuple(args, "OHBB|s#", &socko, &handle, &pb_flag, &bc_flag, &data, &dlen)) {
         return NULL;
     }
 
     dd = socko->sock_fd;
 
     Py_BEGIN_ALLOW_THREADS
-    err = hci_send_cmd(dd, ogf, ocf, plen, (void*)param);
+    err = hci_send_acl(dd, handle, pb_flag, bc_flag, dlen, data);
     Py_END_ALLOW_THREADS
 
     if( err ) return socko->errorhandler();
@@ -62,27 +62,32 @@ bt_hci_send_cmd(PyObject *self, PyObject *args)
     return Py_BuildValue("i", err);
 }
 
-PyDoc_STRVAR(bt_hci_send_cmd_doc, 
-"hci_send_command(sock, ogf, ocf, params)\n\
+PyDoc_STRVAR(bt_hci_send_acl_doc, 
+"hci_send_acl(sock, handle, pb_flag, bc_flag, data)\n\
 \n\
 Transmits the specified HCI command to the socket.\n\
-    sock     - the btoscket object to use\n\
-    ogf, pcf - see bluetooth specification\n\
-    params   - packed command parameters (use the struct module to do this)");
+    sock    - the btoscket object to use\n\
+    handle  - connection handle\n\
+    pb_flag - see bluetooth specification\n\
+    bc_flag - see bluetooth specification\n\
+    data    - ACL data");
 
 #define DECL_BT_METHOD(name, argtype) \
 { #name, (PyCFunction)bt_ ##name, argtype, bt_ ## name ## _doc }
 
 static PyMethodDef bt_methods[] = {
-    DECL_BT_METHOD(hci_send_cmd, METH_VARARGS),
-}
+    DECL_BT_METHOD(hci_send_acl, METH_VARARGS),
+};
+
+PyDoc_STRVAR(bluez_ext_doc,
+"Extension module for bluetooth operations.");
 
 static PyObject *bluez_ext_error;
 
 PyMODINIT_FUNC
 init_bluez_ext(void)
 {
-    PyObject *m = Py_InitModule("bluez_ext", bt_methods);
+    PyObject *m = Py_InitModule3("bluez_ext", bt_methods, bluez_ext_doc);
     if (m == NULL) {
         return;
     }
@@ -94,3 +99,4 @@ init_bluez_ext(void)
     Py_INCREF(bluez_ext_error);
     PyModule_AddObject(m, "error", bluez_ext_error);
 }
+
