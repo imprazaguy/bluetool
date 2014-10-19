@@ -4,8 +4,12 @@ from .error import HCIParseError
 from .utils import letoh8, letoh16
 
 class HCIACLData(object):
-    def __init__(self):
+    def __init__(self, conn_handle, pb_flag=0x0, bc_flag=0x0, data=None):
         super(HCIACLData, self).__init__()
+        self.conn_handle = conn_handle
+        self.pb_flag = pb_flag
+        self.bc_flag = bc_flag
+        self.data = data
 
     @staticmethod
     def get_pkt_size(buf, offset=0):
@@ -21,16 +25,21 @@ class HCIACLData(object):
         if avail_len < 4 + data_len:
             raise HCIParseError('not enough data to parse')
 
-        obj = HCIACLData()
-        obj.conn_handle = (header & 0x0fff)
-        obj.pb_flag = ((header >> 12) & 0x3)
-        obj.bc_flag = ((header >> 14) & 0x3)
-        obj.data = buf[offset:offset+data_len]
-        return obj
+        conn_handle = (header & 0x0fff)
+        pb_flag = ((header >> 12) & 0x3)
+        bc_flag = ((header >> 14) & 0x3)
+        if data_len > 0:
+            data = buf[offset:offset+data_len]
+        else:
+            data = None
+        return HCIACLData(conn_handle, pb_flag, bc_flag, data)
 
 class HCISCOData(object):
-    def __init__(self):
+    def __init__(self, conn_handle, pkt_status_flag=0x0, data=None):
         super(HCISCOData, self).__init__()
+        self.conn_handle = conn_handle
+        self.pkt_status_flag = pkt_status_flag
+        self.data = data
 
     @staticmethod
     def get_pkt_size(buf, offset=0):
@@ -46,8 +55,10 @@ class HCISCOData(object):
         if avail_len < 3 + data_len:
             raise HCIParseError('not enough data to parse')
 
-        obj = HCISCOData()
-        obj.conn_handle = (header & 0x0fff)
-        obj.pkt_status_flag = ((header >> 12) & 0x3)
-        obj.data = buf[offset:offset+data_len]
-        return obj
+        conn_handle = (header & 0x0fff)
+        pkt_status_flag = ((header >> 12) & 0x3)
+        if data_len > 0:
+            data = buf[offset:offset+data_len]
+        else:
+            data = None
+        return HCISCOData(conn_handle, pkt_status_flag, data)
