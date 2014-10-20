@@ -1,6 +1,7 @@
 # performs a simple device inquiry, followed by a remote name request of each
 # discovered device
 
+import bluetool
 from bluetool.command import *
 from bluetool.core import *
 from bluetool.event import *
@@ -77,6 +78,7 @@ def printpacket(pkt):
     print 
 
 if __name__ == "__main__":
+    bluetool.log_to_stream()
     dev_id = 0
     try:
         hci_sock = HCISock(dev_id)

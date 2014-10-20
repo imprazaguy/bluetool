@@ -8,9 +8,11 @@ import signal
 
 from . import bluez
 from . import bluez_ext
+from . import command as btcmd
+from . import event as btevt
 from .command import HCICommand, HCIReadBDAddr
 from .data import HCIACLData, HCISCOData
-from .error import HCIParseError, HCITimeoutError
+from .error import HCICommandError, HCIParseError, HCITimeoutError
 from .event import HCIEvent
 from .utils import letoh8
 
@@ -121,9 +123,9 @@ class HCISock(object):
             buf = self.sock.recv(1024)
             self.rbuf = ''.join((self.rbuf, buf))
 
-        pkt = parse_hci_pkt(self.rbuf)
+        ptype_pkt = parse_hci_pkt(self.rbuf)
         self.rbuf = self.rbuf[pkt_size:]
-        return pkt
+        return ptype_pkt
 
     def recv_hci_evt(self, timeout=None):
         ptype, evt = self.recv_hci_pkt(timeout)
@@ -140,6 +142,9 @@ class HCITask(object):
     def send_hci_cmd(self, cmd):
         self.sock.send_hci_cmd(cmd)
 
+    def send_acl_data(self, data):
+        self.sock.send_acl_data(data)
+
     def get_hci_filter(self):
         return self.sock.get_hci_filter()
 
@@ -147,7 +152,7 @@ class HCITask(object):
         self.sock.set_hci_filter(flt)
 
     def recv_hci_pkt(self, timeout=None):
-        return self.scok.recv_hci_pkt(timeout)
+        return self.sock.recv_hci_pkt(timeout)
 
     def recv_hci_evt(self, timeout=None):
         return self.sock.recv_hci_evt(timeout)

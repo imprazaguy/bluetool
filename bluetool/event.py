@@ -83,6 +83,7 @@ _cmd_complt_evt_param_parser = {
         0x0C45: _parse_cmd_complt_evt_param_status,
         0x1009: _parse_cmd_complt_evt_param_read_bd_addr,
         0x2006: _parse_cmd_complt_evt_param_status,
+        0x2008: _parse_cmd_complt_evt_param_status,
         0x200a: _parse_cmd_complt_evt_param_status,
         0x200e: _parse_cmd_complt_evt_param_status,
         0x200f: _parse_cmd_complt_evt_param_read_white_list_size,
