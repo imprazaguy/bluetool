@@ -96,6 +96,7 @@ class HCISock(object):
             bluez.hci_send_cmd(self.sock, cmd.ogf, cmd.ocf)
 
     def send_acl_data(self, acl):
+        print 'send_acl_data: {}'.format(acl)
         bluez_ext.hci_send_acl(self.sock, acl.conn_handle, acl.pb_flag,
                 acl.bc_flag, acl.data)
 

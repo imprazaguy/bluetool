@@ -1,7 +1,7 @@
 """HCI ACL data and SCO data.
 """
 from .error import HCIParseError
-from .utils import letoh8, letoh16
+from .utils import letoh8, letoh16, bytes2str
 
 class HCIACLData(object):
     def __init__(self, conn_handle, pb_flag=0x0, bc_flag=0x0, data=None):
@@ -10,6 +10,10 @@ class HCIACLData(object):
         self.pb_flag = pb_flag
         self.bc_flag = bc_flag
         self.data = data
+
+    def __str__(self):
+        return '({}, {}, {}, {})'.format(self.conn_handle, self.pb_flag,
+                self.bc_flag, bytes2str(self.data))
 
     @staticmethod
     def get_pkt_size(buf, offset=0):

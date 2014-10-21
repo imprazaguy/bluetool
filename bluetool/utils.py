@@ -42,3 +42,6 @@ def letoh32(buf, offset=0):
 def letoh64(buf, offset=0):
     return _letoh64.unpack_from(buf, offset)[0]
 
+def bytes2str(data):
+    return ':'.join('{:02x}'.format(ord(d)) for d in data)
+

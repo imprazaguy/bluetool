@@ -44,10 +44,8 @@ class LEMaster(HCIWorker):
 
                 time.sleep(1)
 
-                print 'conn_handle: {}'.format(self.conn_handle)
                 data = HCIACLData(self.conn_handle, 0x0, 0x0, '\x00\x01\x02\x03\x04\x05')
                 self.send_acl_data(data)
-                print 'send_acl_data'
 
                 time.sleep(1)
 
@@ -68,7 +66,7 @@ class LESlave(HCIWorker):
         self.peer_addr = peer_addr
 
     def main(self):
-        self.set_hci_filter(HCIFilter(ptypes=bluez.HCI_EVENT_PKT).all_events())
+        self.set_hci_filter(HCIFilter(ptypes=[bluez.HCI_EVENT_PKT,bluez.HCI_ACLDATA_PKT]).all_events())
         helper = LEHelper(self.sock)
 
         try:
@@ -115,7 +113,6 @@ class LETester(HCICoordinator):
         
         n_run = 1
         n_case1_success = 0
-        n_case2_success = 0
         for i in xrange(1, n_run+1):
             # Start test
             self.worker[0].send(True)
@@ -139,7 +136,6 @@ class LETester(HCICoordinator):
         self.worker[1].send(False)
 
         print 'case 1 #success: {}/{}'.format(n_case1_success, n_run)
-        print 'case 2 #success: {}/{}'.format(n_case2_success, n_run)
 
 
 if __name__ == "__main__":
