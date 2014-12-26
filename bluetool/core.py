@@ -96,7 +96,6 @@ class HCISock(object):
             bluez.hci_send_cmd(self.sock, cmd.ogf, cmd.ocf)
 
     def send_acl_data(self, acl):
-        print 'send_acl_data: {}'.format(acl)
         bluez_ext.hci_send_acl(self.sock, acl.conn_handle, acl.pb_flag,
                 acl.bc_flag, acl.data)
 
@@ -138,7 +137,7 @@ class HCITask(object):
     def __init__(self, hci_sock):
         super(HCITask, self).__init__()
         self.sock = hci_sock
-        self.log = logging.getLogger('{}.{}'.format(__name__, self.__class__.__name__))
+        self.log = logging.getLogger('{}.{}'.format(__name__, HCITask))
 
     def send_hci_cmd(self, cmd):
         self.sock.send_hci_cmd(cmd)
@@ -158,15 +157,20 @@ class HCITask(object):
     def recv_hci_evt(self, timeout=None):
         return self.sock.recv_hci_evt(timeout)
 
+    def wait_hci_evt(self, evt_matcher, timeout=None):
+        while True:
+            evt = self.recv_hci_evt(timeout)
+            if evt_matcher(evt):
+                #self.log.info('wait evt: 0x{:02x}'.format(evt.code))
+                return evt
+            self.log.info('ignore event: 0x{:02x}'.format(evt.code))
+
     def send_hci_cmd_wait_cmd_complt(self, cmd):
         old_flt = self.get_hci_filter()
         self.set_hci_filter(HCIFilter(ptypes=bluez.HCI_EVENT_PKT,
             events=bluez.EVT_CMD_COMPLETE, opcode=cmd.opcode))
         self.send_hci_cmd(cmd)
-        while True:
-            evt = self.recv_hci_evt()
-            if evt.code == bluez.EVT_CMD_COMPLETE:
-                break
+        evt = self.wait_hci_evt(lambda evt: evt.code == bluez.EVT_CMD_COMPLETE)
         self.set_hci_filter(old_flt)
         return evt
 
@@ -175,10 +179,7 @@ class HCITask(object):
         self.set_hci_filter(HCIFilter(ptypes=bluez.HCI_EVENT_PKT,
             events=bluez.EVT_CMD_STATUS))
         self.send_hci_cmd(cmd)
-        while True:
-            evt = self.recv_hci_evt()
-            if evt.code == bluez.EVT_CMD_STATUS:
-                break
+        evt = self.wait_hci_evt(lambda evt: evt.code == bluez.EVT_CMD_STATUS)
         self.set_hci_filter(old_flt)
         return evt
 
@@ -188,7 +189,7 @@ class HCIWorker(HCITask, mp.Process):
         self.coord = coord
         self.pipe = pipe
         self.event = mp.Event()
-        self.log = logging.getLogger('{}.{}'.format(__name__, self.__class__.__name__))
+        self.log = logging.getLogger('{}.HCIWorker'.format(__name__))
 
     def run(self):
         try:
@@ -302,93 +303,90 @@ class LEHelper(HCITask):
         self.init_scan_intvl = 96
         self.init_scan_win = 24
 
+    def check_hci_evt_status(self, evt):
+        if evt.status != 0:
+            raise HCICommandError(evt)
+
+    def send_hci_cmd_wait_cmd_complt_check_status(self, cmd):
+        self.check_hci_evt_status(self.send_hci_cmd_wait_cmd_complt(cmd))
+
+    def send_hci_cmd_wait_cmd_status_check_status(self, cmd):
+        self.check_hci_evt_status(self.send_hci_cmd_wait_cmd_status(cmd))
+
     def reset(self):
         cmd = btcmd.HCIReset()
-        evt = self.send_hci_cmd_wait_cmd_complt(cmd)
-        if evt.status != 0:
-            raise HCICommandError(evt)
+        self.send_hci_cmd_wait_cmd_complt_check_status(cmd)
 
         cmd = btcmd.HCISetEventMask(0x20001FFFFFFFFFFFL)
-        evt = self.send_hci_cmd_wait_cmd_complt(cmd)
-        if evt.status != 0:
-            raise HCICommandError(evt)
+        self.send_hci_cmd_wait_cmd_complt_check_status(cmd)
+
+        cmd = btcmd.HCILESetEventMask(0x7ff)
+        self.send_hci_cmd_wait_cmd_complt_check_status(cmd)
 
         cmd = btcmd.HCILEClearWhiteList()
-        evt = self.send_hci_cmd_wait_cmd_complt(cmd)
-        if evt.status != 0:
-            raise HCICommandError(evt)
+        self.send_hci_cmd_wait_cmd_complt_check_status(cmd)
 
     def add_device_to_white_list(self, peer_addr_type, peer_addr):
         cmd = btcmd.HCILEAddDeviceToWhiteList(peer_addr_type, peer_addr)
-        evt = self.send_hci_cmd_wait_cmd_complt(cmd)
-        if evt.status != 0:
-            raise HCICommandError(evt)
+        self.send_hci_cmd_wait_cmd_complt_check_status(cmd)
 
     def remove_device_from_white_list(self, peer_addr_type, peer_addr):
         cmd = btcmd.HCILERemoveDeviceFromWhiteList(peer_addr_type, peer_addr)
-        evt = self.send_hci_cmd_wait_cmd_complt(cmd)
-        if evt.status != 0:
-            raise HCICommandError(evt)
+        self.send_hci_cmd_wait_cmd_complt_check_status(cmd)
 
     def create_connection_by_peer_addr(self, peer_addr_type, peer_addr, conn_intvl, conn_latency, supv_to, ce_len):
         cmd = btcmd.HCILECreateConnection(self.init_scan_intvl,
                 self.init_scan_win, 0, peer_addr_type, peer_addr, 0,
                 conn_intvl, conn_intvl, conn_latency, supv_to, ce_len, ce_len)
-        evt = self.send_hci_cmd_wait_cmd_status(cmd)
-        if evt.status != 0:
-            raise HCICommandError(evt)
+        self.send_hci_cmd_wait_cmd_status_check_status(cmd)
 
     def create_connection_by_white_list(self, conn_intvl, conn_latency, supv_to, ce_len):
         cmd = btcmd.HCILECreateConnection(self.init_scan_intvl,
                 self.init_scan_win, 1, 0, '\x00'*6, 0, conn_intvl, conn_intvl,
                 conn_latency, supv_to, ce_len, ce_len)
-        evt = self.send_hci_cmd_wait_cmd_status(cmd)
-        if evt.status != 0:
-            raise HCICommandError(evt)
+        self.send_hci_cmd_wait_cmd_status_check_status(cmd)
 
     def create_connect_cancel(self):
         cmd = btcmd.HCILECreateConnectionCancel()
-        evt = self.send_hci_cmd_wait_cmd_complt(cmd)
-        if evt.status != 0:
-            raise HCICommandError(evt)
+        self.send_hci_cmd_wait_cmd_complt_check_status(cmd)
 
     def disconnect(self, conn_handle, reason):
         cmd = btcmd.HCIDisconnect(conn_handle, reason)
-        evt = self.send_hci_cmd_wait_cmd_status(cmd)
-        if evt.status != 0:
-            raise HCICommandError(evt)
+        self.send_hci_cmd_wait_cmd_status_check_status(cmd)
+
+    def set_advertising_data(self, data):
+        cmd = btcmd.HCILESetAdvertisingData(data)
+        self.send_hci_cmd_wait_cmd_complt_check_status(cmd)
 
     def start_advertising(self, intvl):
         cmd = btcmd.HCILESetAdvertisingParameters(intvl, intvl, 0, 0, 0, '\x00'*6, 0x7, 0)
-        evt = self.send_hci_cmd_wait_cmd_complt(cmd)
-        if evt.status != 0:
-            raise HCICommandError(evt)
+        self.send_hci_cmd_wait_cmd_complt_check_status(cmd)
 
         cmd = btcmd.HCILESetAdvertiseEnable(1)
-        evt = self.send_hci_cmd_wait_cmd_complt(cmd)
-        if evt.status != 0:
-            raise HCICommandError(evt)
+        self.send_hci_cmd_wait_cmd_complt_check_status(cmd)
 
     def stop_advertising(self):
         cmd = btcmd.HCILESetAdvertiseEnable(0)
-        evt = self.send_hci_cmd_wait_cmd_complt(cmd)
-        if evt.status != 0:
-            raise HCICommandError(evt)
+        self.send_hci_cmd_wait_cmd_complt_check_status(cmd)
+
+    def wait_le_event(self, subevt_code, timeout=None):
+        return self.wait_hci_evt(
+                lambda evt: evt.code == bluez.EVT_LE_META_EVENT and evt.subevt_code == subevt_code,
+                timeout)
 
     def wait_connection_complete(self, timeout=None):
-        while True:
-            evt = self.recv_hci_evt(timeout)
-            if evt.code == bluez.EVT_LE_META_EVENT and evt.subevt_code == bluez.EVT_LE_CONN_COMPLETE:
-                return evt
-            else:
-                self.log.info('ignore event: %d', evt.code)
+        return self.wait_hci_evt(
+                lambda evt: evt.code == bluez.EVT_LE_META_EVENT and evt.subevt_code == bluez.EVT_LE_CONN_COMPLETE,
+                timeout)
 
     def wait_disconnection_complete(self, conn_handle=None, timeout=None):
-        while True:
-            evt = self.recv_hci_evt(timeout)
-            if evt.code == bluez.EVT_DISCONN_COMPLETE:
-                if conn_handle is None or conn_handle == evt.conn_handle:
-                    return evt
-            else:
-                self.log.info('ignore event: %d', evt.code)
+        return self.wait_hci_evt(
+                lambda evt: evt.code == bluez.EVT_DISCONN_COMPLETE and (conn_handle is None or conn_handle == evt.conn_handle),
+                timeout)
+
+    def set_data_len(self, conn_handle, tx_octets):
+        # 14 = 1(Preamble) + 4(Access Code) + 2(PDU Header) + 4(MIC) + 3(CRC)
+        tx_time = (tx_octets + 14) * 8
+        cmd = btcmd.HCILESetDataLength(conn_handle, tx_octets, tx_time)
+        self.send_hci_cmd_wait_cmd_complt_check_status(cmd)
 

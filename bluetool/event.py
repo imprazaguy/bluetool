@@ -10,6 +10,12 @@ class HCIEvent(object):
         super(HCIEvent, self).__init__()
         self.code = code
 
+    def __str__(self):
+        return '{}{}'.format(self.__class__.__name__, self.param_str())
+
+    def param_str(self):
+        return ''
+
     def unpack_param(self, buf, offset=0):
         raise NotImplementedError
 
@@ -58,6 +64,21 @@ class DisconnectionCompleteEvent(HCIEvent):
         offset += 2
         self.reason = letoh8(buf, offset)
 
+class ReadRemoteVersionInformationCompleteEvent(HCIEvent):
+    def __init__(self):
+        super(ReadRemoteVersionInformationCompleteEvent, self).__init__(bluez.EVT_READ_REMOTE_VERSION_COMPLETE)
+
+    def unpack_param(self, buf, offset):
+        self.status = letoh8(buf, offset)
+        offset += 1
+        self.conn_handle = letoh16(buf, offset)
+        offset += 2
+        self.version = letoh8(buf, offset)
+        offset += 1
+        self.manu_name = letoh16(buf, offset)
+        offset += 2
+        self.subversion = letoh16(buf, offset)
+
 def _parse_cmd_complt_evt_param_status(evt, buf, offset):
     evt.status = letoh8(buf, offset)
 
@@ -76,12 +97,18 @@ def _parse_cmd_complt_evt_param_read_white_list_size(evt, buf, offset):
     offset += 1
     evt.wlist_size = letoh8(buf, offset)
 
+def _parse_cmd_complt_evt_param_conn_handle(evt, buf, offset):
+    evt.status = letoh8(buf, offset)
+    offset += 1
+    evt.conn_handle = letoh16(buf, offset)
+
 _cmd_complt_evt_param_parser = {
         0x0C01: _parse_cmd_complt_evt_param_status,
         0x0C03: _parse_cmd_complt_evt_param_status,
         0x0C44: _parse_cmd_complt_evt_param_read_inquiry_mode,
         0x0C45: _parse_cmd_complt_evt_param_status,
         0x1009: _parse_cmd_complt_evt_param_read_bd_addr,
+        0x2001: _parse_cmd_complt_evt_param_status,
         0x2006: _parse_cmd_complt_evt_param_status,
         0x2008: _parse_cmd_complt_evt_param_status,
         0x200a: _parse_cmd_complt_evt_param_status,
@@ -90,11 +117,15 @@ _cmd_complt_evt_param_parser = {
         0x2010: _parse_cmd_complt_evt_param_status,
         0x2011: _parse_cmd_complt_evt_param_status,
         0x2012: _parse_cmd_complt_evt_param_status,
+        0x2022: _parse_cmd_complt_evt_param_conn_handle,
 }
 
 class CommandCompleteEvent(HCIEvent):
     def __init__(self):
         super(CommandCompleteEvent, self).__init__(bluez.EVT_CMD_COMPLETE)
+
+    def param_str(self):
+        return '({}, 0x{:02x})'.format(self.num_hci_cmd_pkt, self.cmd_opcode)
 
     def unpack_param(self, buf, offset=0):
         self.num_hci_cmd_pkt = letoh8(buf, offset)
@@ -188,6 +219,21 @@ class LEConnectionCompleteEvent(LEMetaEvent):
         offset += 2
         self.master_clk_accuracy = letoh8(buf, offset)
 
+class LEDataLengthChangeEvent(LEMetaEvent):
+    def __init__(self):
+        super(LEDataLengthChangeEvent, self).__init__(bluez.EVT_LE_DATA_LEN_CHANGE)
+
+    def unpack_param(self, buf, offset):
+        self.conn_handle = letoh16(buf, offset)
+        offset += 2
+        self.max_tx_octets = letoh16(buf, offset)
+        offset += 2
+        self.max_tx_time = letoh16(buf, offset)
+        offset += 2
+        self.max_rx_octets = letoh16(buf, offset)
+        offset += 2
+        self.max_rx_time = letoh16(buf, offset)
+
 _evt_table = {
         bluez.EVT_INQUIRY_COMPLETE: InquiryCompleteEvent,
         bluez.EVT_DISCONN_COMPLETE: DisconnectionCompleteEvent,
@@ -198,7 +244,8 @@ _evt_table = {
 }
 
 _le_evt_table = {
-        bluez.EVT_LE_CONN_COMPLETE: LEConnectionCompleteEvent
+        bluez.EVT_LE_CONN_COMPLETE: LEConnectionCompleteEvent,
+        bluez.EVT_LE_DATA_LEN_CHANGE: LEDataLengthChangeEvent,
 }
 
 def parse_hci_event(code, buf, offset=0):

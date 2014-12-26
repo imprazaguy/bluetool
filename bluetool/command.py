@@ -13,6 +13,9 @@ class HCICommand(object):
         self.ogf = ogf
         self.ocf = ocf
 
+    def __str__(self):
+        return self.__class__.__name__
+
     @property
     def opcode(self):
         return bluez.cmd_opcode_pack(self.ogf, self.ocf)
@@ -101,6 +104,14 @@ class HCILEControllerCommand(HCICommand):
     def __init__(self, ocf):
         super(HCILEControllerCommand, self).__init__(bluez.OGF_LE_CTL, ocf)
 
+class HCILESetEventMask(HCILEControllerCommand):
+    def __init__(self, le_evt_mask):
+        super(HCILESetEventMask, self).__init__(bluez.OCF_LE_SET_EVENT_MASK)
+        self.le_evt_mask = le_evt_mask
+
+    def pack_param(self):
+        return htole64(self.le_evt_mask)
+
 class HCILESetAdvertisingParameters(HCILEControllerCommand):
     def __init__(self, adv_intvl_min, adv_intvl_max, adv_type, own_addr_type, direct_addr_type, direct_addr, adv_channel_map, adv_filter_policy):
         super(HCILESetAdvertisingParameters, self).__init__(
@@ -126,11 +137,11 @@ class HCILESetAdvertisingParameters(HCILEControllerCommand):
                     htole8(self.adv_filter_policy)))
 
 class HCILESetAdvertisingData(HCILEControllerCommand):
-    def __init__(self, adv_data_len, adv_data):
+    def __init__(self, adv_data):
         super(HCILESetAdvertisingData, self).__init__(
                 bluez.OCF_LE_SET_ADVERTISING_DATA)
-        self.adv_data_len = adv_data_len
-        self.adv_data = adv_data
+        self.adv_data_len = len(adv_data)
+        self.adv_data = ''.join((adv_data, '\x00'*(31 - self.adv_data_len)))
 
     def pack_param(self):
         return ''.join((htole8(self.adv_data_len), self.adv_data))
@@ -208,3 +219,14 @@ class HCILERemoveDeviceFromWhiteList(HCILEControllerCommand):
     def pack_param(self):
         return ''.join((htole8(self.addr_type), self.addr))
 
+class HCILESetDataLength(HCILEControllerCommand):
+    def __init__(self, conn_handle, tx_octets, tx_time):
+        super(HCILESetDataLength, self).__init__(bluez.OCF_LE_SET_DATA_LEN)
+        self.conn_handle = conn_handle
+        self.tx_octets = tx_octets
+        self.tx_time = tx_time
+
+    def pack_param(self):
+        return ''.join((htole16(self.conn_handle),
+            htole16(self.tx_octets),
+            htole16(self.tx_time)))
