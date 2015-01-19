@@ -308,10 +308,14 @@ class LEHelper(HCITask):
             raise HCICommandError(evt)
 
     def send_hci_cmd_wait_cmd_complt_check_status(self, cmd):
-        self.check_hci_evt_status(self.send_hci_cmd_wait_cmd_complt(cmd))
+        evt = self.send_hci_cmd_wait_cmd_complt(cmd)
+        self.check_hci_evt_status(evt)
+        return evt
 
     def send_hci_cmd_wait_cmd_status_check_status(self, cmd):
-        self.check_hci_evt_status(self.send_hci_cmd_wait_cmd_status(cmd))
+        evt = self.send_hci_cmd_wait_cmd_status(cmd)
+        self.check_hci_evt_status(evt)
+        return evt
 
     def reset(self):
         cmd = btcmd.HCIReset()
@@ -325,6 +329,10 @@ class LEHelper(HCITask):
 
         cmd = btcmd.HCILEClearWhiteList()
         self.send_hci_cmd_wait_cmd_complt_check_status(cmd)
+
+    def read_buffer_size(self):
+        cmd = btcmd.HCILEReadBufferSize()
+        return self.send_hci_cmd_wait_cmd_complt_check_status(cmd)
 
     def add_device_to_white_list(self, peer_addr_type, peer_addr):
         cmd = btcmd.HCILEAddDeviceToWhiteList(peer_addr_type, peer_addr)

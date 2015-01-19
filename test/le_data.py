@@ -12,12 +12,13 @@ from bluetool.data import HCIACLData
 
 CONN_TIMEOUT_MS = 10000
 HCI_ACL_MAX_SIZE = 27
-NUM_ACL_DATA = 8
+NUM_ACL_DATA = 1600
 
 class LEMaster(HCIWorker):
     def __init__(self, hci_sock, coord, pipe, peer_addr=None):
         super(LEMaster, self).__init__(hci_sock, coord, pipe)
         self.peer_addr = peer_addr
+        self.num_acl_tx_not_acked = 0
 
     def create_test_acl_data(self):
         data = [None]*NUM_ACL_DATA
@@ -31,13 +32,38 @@ class LEMaster(HCIWorker):
                     ''.join(chr(c & 0xff) for c in xrange(data_i, data_i + HCI_ACL_MAX_SIZE)))
             data_i = (data_i + 1) % 256
         return data
-        
+
+    def setup_h2c_flow_control(self):
+        evt = LEHelper(self.sock).read_buffer_size()
+        self.hc_le_acl_data_pkt_len = evt.hc_le_acl_data_pkt_len
+        self.hc_total_num_le_acl_data_pkts = evt.hc_total_num_le_acl_data_pkts
+        self.log.info('acl_data_pkt_len=%d, #acl_data_pkts=%d',
+                self.hc_le_acl_data_pkt_len,
+                self.hc_total_num_le_acl_data_pkts)
+
+    def send_acl_data(self, acl_data):
+        while self.num_acl_tx_not_acked >= self.hc_total_num_le_acl_data_pkts:
+            evt = self.wait_hci_evt(lambda evt: evt.code == bluez.EVT_NUM_COMP_PKTS)
+            tx_acked = sum(evt.num_completed_pkts)
+            self.num_acl_tx_not_acked -= tx_acked
+        super(LEMaster, self).send_acl_data(acl_data)
+        self.num_acl_tx_not_acked += 1
+        self.log.info('num_acl_tx_not_acked=%d', self.num_acl_tx_not_acked)
+        try:
+            evt = self.wait_hci_evt(lambda evt: evt.code == bluez.EVT_NUM_COMP_PKTS,
+                    0)
+            tx_acked = sum(evt.num_completed_pkts)
+            self.num_acl_tx_not_acked -= tx_acked
+        except HCITimeoutError:
+            pass
+
     def main(self):
         self.set_hci_filter(HCIFilter(ptypes=bluez.HCI_EVENT_PKT).all_events())
         helper = LEHelper(self.sock)
 
         try:
             helper.reset()
+            self.setup_h2c_flow_control()
         except HCICommandError as err:
             self.log.warning('cannot reset', exc_info=True)
             return
@@ -99,13 +125,11 @@ class LESlave(HCIWorker):
             try:
                 helper.start_advertising(0xA0)
                 evt = helper.wait_connection_complete()
-                self.log.info('wait le conn complt')
                 if evt.status != 0:
                     raise TestError('connection fail: status: 0x{:02x}'.format(evt.status))
                 self.conn_handle = evt.conn_handle
                 self.log.info('connect to %s', ba2str(evt.peer_addr))
 
-                self.log.info('wait data len change')
                 helper.wait_le_event(bluez.EVT_LE_DATA_LEN_CHANGE)
 
                 self.send(True) # trigger master to send data

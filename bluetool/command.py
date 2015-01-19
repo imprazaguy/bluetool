@@ -112,6 +112,10 @@ class HCILESetEventMask(HCILEControllerCommand):
     def pack_param(self):
         return htole64(self.le_evt_mask)
 
+class HCILEReadBufferSize(HCILEControllerCommand):
+    def __init__(self):
+        super(HCILEReadBufferSize, self).__init__(bluez.OCF_LE_READ_BUFFER_SIZE)
+
 class HCILESetAdvertisingParameters(HCILEControllerCommand):
     def __init__(self, adv_intvl_min, adv_intvl_max, adv_type, own_addr_type, direct_addr_type, direct_addr, adv_channel_map, adv_filter_policy):
         super(HCILESetAdvertisingParameters, self).__init__(

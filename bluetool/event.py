@@ -97,6 +97,13 @@ def _parse_cmd_complt_evt_param_read_white_list_size(evt, buf, offset):
     offset += 1
     evt.wlist_size = letoh8(buf, offset)
 
+def _parse_cmd_complt_evt_param_le_read_buf_size(evt, buf, offset):
+    evt.status = letoh8(buf, offset)
+    offset += 1
+    evt.hc_le_acl_data_pkt_len = letoh16(buf, offset)
+    offset += 2
+    evt.hc_total_num_le_acl_data_pkts = letoh8(buf, offset)
+
 def _parse_cmd_complt_evt_param_conn_handle(evt, buf, offset):
     evt.status = letoh8(buf, offset)
     offset += 1
@@ -109,6 +116,7 @@ _cmd_complt_evt_param_parser = {
         0x0C45: _parse_cmd_complt_evt_param_status,
         0x1009: _parse_cmd_complt_evt_param_read_bd_addr,
         0x2001: _parse_cmd_complt_evt_param_status,
+        0x2002: _parse_cmd_complt_evt_param_le_read_buf_size,
         0x2006: _parse_cmd_complt_evt_param_status,
         0x2008: _parse_cmd_complt_evt_param_status,
         0x200a: _parse_cmd_complt_evt_param_status,
