@@ -245,6 +245,7 @@ class LEDataLengthChangeEvent(LEMetaEvent):
 _evt_table = {
         bluez.EVT_INQUIRY_COMPLETE: InquiryCompleteEvent,
         bluez.EVT_DISCONN_COMPLETE: DisconnectionCompleteEvent,
+        bluez.EVT_READ_REMOTE_VERSION_COMPLETE: ReadRemoteVersionInformationCompleteEvent,
         bluez.EVT_CMD_COMPLETE: CommandCompleteEvent,
         bluez.EVT_CMD_STATUS: CommandStatusEvent,
         bluez.EVT_NUM_COMP_PKTS: NumberOfCompletedPacketsEvent,
