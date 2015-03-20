@@ -297,11 +297,9 @@ class HCICoordinator(object):
         """
         raise NotImplementedError
 
-class LEHelper(HCITask):
+class BTHelper(HCITask):
     def __init__(self, hci_sock):
-        super(LEHelper, self).__init__(hci_sock)
-        self.init_scan_intvl = 96
-        self.init_scan_win = 24
+        super(BTHelper, self).__init__(hci_sock)
 
     def check_hci_evt_status(self, evt):
         if evt.status != 0:
@@ -316,6 +314,48 @@ class LEHelper(HCITask):
         evt = self.send_hci_cmd_wait_cmd_status(cmd)
         self.check_hci_evt_status(evt)
         return evt
+
+class BREDRHelper(BTHelper):
+    def __init__(self, hci_sock):
+        super(BREDRHelper, self).__init__(hci_sock)
+
+    def reset(self):
+        cmd = btcmd.HCIReset()
+        self.send_hci_cmd_wait_cmd_complt_check_status(cmd)
+
+        cmd = btcmd.HCISetEventMask(0x20001FFFFFFFFFFFL)
+        self.send_hci_cmd_wait_cmd_complt_check_status(cmd)
+
+        cmd = btcmd.HCIWritePageScanActivity(0x0800, 0x0012)
+        self.send_hci_cmd_wait_cmd_complt_check_status(cmd)
+
+        cmd = btcmd.HCIWriteScanEnable(0x02)
+        self.send_hci_cmd_wait_cmd_complt_check_status(cmd)
+
+    def create_connection_by_peer_addr(self, peer_addr):
+        cmd = btcmd.HCICreateConnection(peer_addr, 0x0000, 0x01, 0x0000, 0x00)
+        self.send_hci_cmd_wait_cmd_status_check_status(cmd)
+
+    def accept_connection(self, timeout=None):
+        evt = self.wait_hci_evt(lambda evt: evt.code == bluez.EVT_CONN_REQUEST, timeout)
+        #cmd = btcmd.HCIAcceptConnectionRequest(evt.bd_addr, 0x01)
+        #self.send_hci_cmd_wait_cmd_status_check_status(cmd)
+
+    def wait_connection_complete(self, timeout=None):
+        return self.wait_hci_evt(
+                lambda evt: evt.code == bluez.EVT_CONN_COMPLETE,
+                timeout)
+
+    def wait_disconnection_complete(self, conn_handle=None, timeout=None):
+        return self.wait_hci_evt(
+                lambda evt: evt.code == bluez.EVT_DISCONN_COMPLETE and (conn_handle is None or conn_handle == evt.conn_handle),
+                timeout)
+
+class LEHelper(BTHelper):
+    def __init__(self, hci_sock):
+        super(LEHelper, self).__init__(hci_sock)
+        self.init_scan_intvl = 96
+        self.init_scan_win = 24
 
     def reset(self):
         cmd = btcmd.HCIReset()

@@ -53,6 +53,23 @@ class HCIInquiry(HCILinkControlCommand):
                     htole8(self.inquiry_len),
                     htole8(self.num_responses)))
 
+class HCICreateConnection(HCILinkControlCommand):
+    def __init__(self, bd_addr, pkt_type, page_scan_rep_mode, clk_offs, allow_role_switch):
+        super(HCICreateConnection, self).__init__(bluez.OCF_CREATE_CONN)
+        self.bd_addr = bd_addr
+        self.pkt_type = pkt_type
+        self.page_scan_rep_mode = page_scan_rep_mode
+        self.clk_offs = clk_offs
+        self.allow_role_switch = allow_role_switch
+
+    def pack_param(self):
+        return ''.join(
+                (self.bd_addr, htole16(self.pkt_type),
+                    htole8(self.page_scan_rep_mode),
+                    htole8(0x00), # Reserved
+                    htole16(self.clk_offs),
+                    htole8(self.allow_role_switch)))
+
 class HCIDisconnect(HCILinkControlCommand):
     def __init__(self, conn_handle, reason):
         super(HCIDisconnect, self).__init__(bluez.OCF_DISCONNECT)
@@ -62,6 +79,15 @@ class HCIDisconnect(HCILinkControlCommand):
     def pack_param(self):
         return ''.join((htole16(self.conn_handle), htole8(self.reason)))
  
+class HCIAcceptConnectionRequest(HCILinkControlCommand):
+    def __init__(self, bd_addr, role):
+        super(HCIAcceptConnectionRequest, self).__init__(bluez.OCF_ACCEPT_CONN_REQ)
+        self.bd_addr = bd_addr
+        self.role = role
+
+    def pack_param(self):
+        return ''.join((self.bd_addr, htole8(self.role)))
+
 class HCIControllerCommand(HCICommand):
     def __init__(self, ocf):
         super(HCIControllerCommand, self).__init__(bluez.OGF_HOST_CTL, ocf)
@@ -77,6 +103,30 @@ class HCISetEventMask(HCIControllerCommand):
 class HCIReset(HCIControllerCommand):
     def __init__(self):
         super(HCIReset, self).__init__(bluez.OCF_RESET)
+
+class HCIReadScanEnable(HCIControllerCommand):
+    def __init__(self):
+        super(HCIReadScanEnable, self).__init__(bluez.OCF_READ_SCAN_ENABLE)
+
+class HCIWriteScanEnable(HCIControllerCommand):
+    def __init__(self, scan_enable):
+        super(HCIWriteScanEnable, self).__init__(bluez.OCF_WRITE_SCAN_ENABLE)
+        self.scan_enable = scan_enable
+        print bluez.OCF_WRITE_SCAN_ENABLE
+
+    def pack_param(self):
+        return htole8(self.scan_enable)
+
+class HCIWritePageScanActivity(HCIControllerCommand):
+    def __init__(self, page_scan_intvl, page_scan_window):
+        super(HCIWritePageScanActivity, self).__init__(bluez.OCF_WRITE_PAGE_ACTIVITY)
+        self.page_scan_intvl = page_scan_intvl
+        self.page_scan_window = page_scan_window
+
+    def pack_param(self):
+        return ''.join(
+                (htole16(self.page_scan_intvl),
+                    htole16(self.page_scan_window)))
 
 class HCIReadInquiryMode(HCIControllerCommand):
     def __init__(self):

@@ -16,6 +16,11 @@ class HCIParseError(HCIError):
     def __init__(self, msg):
         super(HCIParseError, self).__init__(msg)
 
+class HCIEventNotImplementedError(HCIError):
+    def __init__(self, evt_code):
+        self.evt_code = evt_code
+        super(HCIParseError, self).__init__(str(evt_code))
+
 class HCITimeoutError(HCIError):
     def __init__(self):
         super(HCITimeoutError, self).__init__()
