@@ -279,8 +279,8 @@ class BREDRHelper(BTHelper):
 
     def accept_connection(self, timeout=None):
         evt = self.wait_hci_evt(lambda evt: evt.code == bluez.EVT_CONN_REQUEST, timeout)
-        #cmd = btcmd.HCIAcceptConnectionRequest(evt.bd_addr, 0x01)
-        #self.send_hci_cmd_wait_cmd_status_check_status(cmd)
+        cmd = btcmd.HCIAcceptConnectionRequest(evt.bd_addr, 0x01)
+        self.send_hci_cmd_wait_cmd_status_check_status(cmd)
 
     def wait_connection_complete(self, timeout=None):
         return self.wait_hci_evt(
