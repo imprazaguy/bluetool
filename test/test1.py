@@ -16,27 +16,19 @@ class InquiryRSSIWorker(HCITask):
 
     def read_inquiry_mode(self):
         cmd_pkt = HCIReadInquiryMode()
-        self.send_hci_cmd(cmd_pkt)
-        self.set_hci_filter(HCIFilter(ptypes=bluez.HCI_EVENT_PKT,
-            events=bluez.EVT_CMD_COMPLETE, opcode=cmd_pkt.opcode))
-        evt = self.recv_hci_evt()
+        evt = self.send_hci_cmd_wait_cmd_complt(cmd_pkt)
         if evt.status != 0:
             return -1
         return evt.inquiry_mode
 
     def write_inquiry_mode(self, mode):
         cmd_pkt = HCIWriteInquiryMode(mode)
-        self.send_hci_cmd(cmd_pkt)
-        self.set_hci_filter(HCIFilter(ptypes=bluez.HCI_EVENT_PKT,
-            events=bluez.EVT_CMD_COMPLETE, opcode=cmd_pkt.opcode))
-        evt = self.recv_hci_evt()
+        evt = self.send_hci_cmd_wait_cmd_complt(cmd_pkt)
         if evt.status != 0:
             return -1
         return 0
 
     def inquiry_with_rssi(self):
-        self.set_hci_filter(HCIFilter(ptypes=bluez.HCI_EVENT_PKT).all_events())
-
         cmd_pkt = HCIInquiry(0x9e8b33, 4, 255)
         self.send_hci_cmd(cmd_pkt)
 
@@ -57,7 +49,7 @@ class InquiryRSSIWorker(HCITask):
                     print "uh oh..."
                     done = True
             else:
-                print "unrecognized packet type"
+                print "unrecognized event: {}".format(evt)
 
 
     def run(self):

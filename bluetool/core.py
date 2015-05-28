@@ -7,7 +7,6 @@ import select
 import signal
 
 from . import bluez
-from . import bluez_ext
 from . import command as btcmd
 from . import event as btevt
 from .command import HCICommand, HCIReadBDAddr
@@ -35,48 +34,10 @@ def parse_hci_pkt(buf, offset=0):
     pkt = _pkt_table[ptype].parse(buf, offset)
     return (ptype, pkt)
 
-class HCIFilter(object):
-    def __init__(self, obj=None, ptypes=None, events=None, opcode=None):
-        super(HCIFilter, self).__init__()
-        if obj is None:
-            self.obj = bluez.hci_filter_new()
-        else:
-            self.obj = obj
-        if ptypes is not None:
-            try:
-                self.ptype(*ptypes)
-            except TypeError:
-                self.ptype(ptypes)
-        if events is not None:
-            try:
-                self.event(*events)
-            except TypeError:
-                self.event(events)
-        if opcode is not None:
-            self.opcode(opcode)
-
-    def ptype(self, *args):
-        for pt in args:
-            bluez.hci_filter_set_ptype(self.obj, pt)
-        return self
-
-    def event(self, *args):
-        for evt in args:
-            bluez.hci_filter_set_event(self.obj, evt)
-        return self
-
-    def all_events(self):
-        bluez.hci_filter_all_events(self.obj)
-        return self
-
-    def opcode(self, opcode):
-        bluez.hci_filter_set_opcode(self.obj, opcode)
-        return self
-
 class HCISock(object):
     def __init__(self, dev_id):
         super(HCISock, self).__init__()
-        self.sock = bluez.hci_open_dev(dev_id)
+        self.sock = bluez.hci_new_user_channel(dev_id)
         self.poll = select.poll()
         self.poll.register(self.sock, (select.POLLIN | select.POLLPRI))
         self.rbuf = ''
@@ -96,14 +57,8 @@ class HCISock(object):
             bluez.hci_send_cmd(self.sock, cmd.ogf, cmd.ocf)
 
     def send_acl_data(self, acl):
-        bluez_ext.hci_send_acl(self.sock, acl.conn_handle, acl.pb_flag,
+        bluez.hci_send_acl(self.sock, acl.conn_handle, acl.pb_flag,
                 acl.bc_flag, acl.data)
-
-    def get_hci_filter(self):
-        return HCIFilter(self.sock.getsockopt(bluez.SOL_HCI, bluez.HCI_FILTER, 14))
-
-    def set_hci_filter(self, flt):
-        self.sock.setsockopt(bluez.SOL_HCI, bluez.HCI_FILTER, flt.obj)
 
     def recv_hci_pkt(self, timeout=None):
         """Receive a HCI packet.
@@ -145,12 +100,6 @@ class HCITask(object):
     def send_acl_data(self, data):
         self.sock.send_acl_data(data)
 
-    def get_hci_filter(self):
-        return self.sock.get_hci_filter()
-
-    def set_hci_filter(self, flt):
-        self.sock.set_hci_filter(flt)
-
     def recv_hci_pkt(self, timeout=None):
         return self.sock.recv_hci_pkt(timeout)
 
@@ -166,21 +115,13 @@ class HCITask(object):
             self.log.info('ignore event: 0x{:02x}'.format(evt.code))
 
     def send_hci_cmd_wait_cmd_complt(self, cmd):
-        old_flt = self.get_hci_filter()
-        self.set_hci_filter(HCIFilter(ptypes=bluez.HCI_EVENT_PKT,
-            events=bluez.EVT_CMD_COMPLETE, opcode=cmd.opcode))
         self.send_hci_cmd(cmd)
-        evt = self.wait_hci_evt(lambda evt: evt.code == bluez.EVT_CMD_COMPLETE)
-        self.set_hci_filter(old_flt)
+        evt = self.wait_hci_evt(lambda evt: evt.code == bluez.EVT_CMD_COMPLETE and evt.cmd_opcode == cmd.opcode)
         return evt
 
     def send_hci_cmd_wait_cmd_status(self, cmd):
-        old_flt = self.get_hci_filter()
-        self.set_hci_filter(HCIFilter(ptypes=bluez.HCI_EVENT_PKT,
-            events=bluez.EVT_CMD_STATUS))
         self.send_hci_cmd(cmd)
-        evt = self.wait_hci_evt(lambda evt: evt.code == bluez.EVT_CMD_STATUS)
-        self.set_hci_filter(old_flt)
+        evt = self.wait_hci_evt(lambda evt: evt.code == bluez.EVT_CMD_STATUS and evt.cmd_opcode == cmd.opcode)
         return evt
 
 class HCIWorker(HCITask, mp.Process):
