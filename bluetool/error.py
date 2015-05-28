@@ -19,7 +19,20 @@ class HCIParseError(HCIError):
 class HCIEventNotImplementedError(HCIError):
     def __init__(self, evt_code):
         self.evt_code = evt_code
-        super(HCIParseError, self).__init__(str(evt_code))
+        super(HCIEventNotImplementedError, self).__init__(
+                '{}: code: 0x{:02X}'.format(self.__class__.__name__, evt_code))
+
+class HCICommandCompleteEventNotImplementedError(HCIError):
+    def __init__(self, opcode):
+        self.opcode = opcode
+        super(HCICommandCompleteEventNotImplementedError, self).__init__(
+                '{}: opcode: 0x{:04X}'.format(self.__class__.__name__, opcode))
+
+class HCILEEventNotImplementedError(HCIError):
+    def __init__(self, subevt_code):
+        self.subevt_code = subevt_code
+        super(HCILEEventNotImplementedError, self).__init__(
+                '{}: subevt_code: 0x{:02X}'.format(self.__class__.__name__, subevt_code))
 
 class HCITimeoutError(HCIError):
     def __init__(self):
