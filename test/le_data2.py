@@ -2,7 +2,7 @@
 import time
 
 import bluetool
-from bluetool.core import HCICoordinator, HCIFilter, HCIWorker, HCIWorkerProxy, HCITask, LEHelper
+from bluetool.core import HCICoordinator, HCIWorker, HCIWorkerProxy, HCITask, LEHelper
 from bluetool.bluez import ba2str
 from bluetool.error import HCICommandError, TestError, HCITimeoutError
 import bluetool.bluez as bluez
@@ -54,7 +54,6 @@ class LEMaster(HCIWorker):
             pass
 
     def main(self):
-        self.set_hci_filter(HCIFilter(ptypes=[bluez.HCI_EVENT_PKT,bluez.HCI_ACLDATA_PKT]).all_events())
         helper = LEHelper(self.sock)
 
         try:
@@ -138,7 +137,6 @@ class LESlave(HCIWorker):
             pass
 
     def main(self):
-        self.set_hci_filter(HCIFilter(ptypes=[bluez.HCI_EVENT_PKT,bluez.HCI_ACLDATA_PKT]).all_events())
         helper = LEHelper(self.sock)
 
         try:
