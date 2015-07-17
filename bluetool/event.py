@@ -6,9 +6,9 @@ from .utils import letoh8, letohs8, letoh16, letoh24
 
 
 class HCIEvent(object):
-    def __init__(self, code):
-        super(HCIEvent, self).__init__()
-        self.code = code
+    """Base HCI event object."""
+
+    code = 0 # Event code
 
     def __str__(self):
         return '{}{}'.format(self.__class__.__name__, self.param_str())
@@ -56,15 +56,13 @@ class HCIEvent(object):
             return HCIEvent(code)
 
 class InquiryCompleteEvent(HCIEvent):
-    def __init__(self):
-        super(InquiryCompleteEvent, self).__init__(bluez.EVT_INQUIRY_COMPLETE)
+    code = bluez.EVT_INQUIRY_COMPLETE
 
     def unpack_param(self, buf, offset):
         self.status = letoh8(buf, offset)
 
 class ConnectionCompleteEvent(HCIEvent):
-    def __init__(self):
-        super(ConnectionCompleteEvent, self).__init__(bluez.EVT_CONN_COMPLETE)
+    code = bluez.EVT_CONN_COMPLETE
 
     def unpack_param(self, buf, offset):
         self.status = letoh8(buf, offset)
@@ -78,8 +76,7 @@ class ConnectionCompleteEvent(HCIEvent):
         self.enc_enabled = letoh8(buf, offset)
 
 class ConnectionRequestEvent(HCIEvent):
-    def __init__(self):
-        super(ConnectionRequestEvent, self).__init__(bluez.EVT_CONN_REQUEST)
+    code = bluez.EVT_CONN_REQUEST
 
     def unpack_param(self, buf, offset):
         self.bd_addr = buf[offset:offset+6]
@@ -89,8 +86,7 @@ class ConnectionRequestEvent(HCIEvent):
         self.link_type = letoh8(buf, offset)
 
 class DisconnectionCompleteEvent(HCIEvent):
-    def __init__(self):
-        super(DisconnectionCompleteEvent, self).__init__(bluez.EVT_DISCONN_COMPLETE)
+    code = bluez.EVT_DISCONN_COMPLETE
 
     def unpack_param(self, buf, offset):
         self.status = letoh8(buf, offset)
@@ -100,8 +96,7 @@ class DisconnectionCompleteEvent(HCIEvent):
         self.reason = letoh8(buf, offset)
 
 class RemoteNameRequestCompleteEvent(HCIEvent):
-    def __init__(self):
-        super(RemoteNameRequestCompleteEvent, self).__init__(bluez.EVT_REMOTE_NAME_REQ_COMPLETE)
+    code = bluez.EVT_REMOTE_NAME_REQ_COMPLETE
 
     def unpack_param(self, buf, offset):
         self.status = letoh8(buf, offset)
@@ -111,8 +106,7 @@ class RemoteNameRequestCompleteEvent(HCIEvent):
         self.remote_name = buf[offset:]
 
 class ReadRemoteSupportedFeaturesCompleteEvent(HCIEvent):
-    def __init__(self):
-        super(ReadRemoteSupportedFeaturesCompleteEvent, self).__init__(bluez.EVT_READ_REMOTE_FEATURES_COMPLETE)
+    code = bluez.EVT_READ_REMOTE_FEATURES_COMPLETE
 
     def unpack_param(self, buf, offset):
         self.status = letoh8(buf, offset)
@@ -122,8 +116,7 @@ class ReadRemoteSupportedFeaturesCompleteEvent(HCIEvent):
         self.lmp_features = buf[offset:offset+8]
 
 class ReadRemoteVersionInformationCompleteEvent(HCIEvent):
-    def __init__(self):
-        super(ReadRemoteVersionInformationCompleteEvent, self).__init__(bluez.EVT_READ_REMOTE_VERSION_COMPLETE)
+    code = bluez.EVT_READ_REMOTE_VERSION_COMPLETE
 
     def unpack_param(self, buf, offset):
         self.status = letoh8(buf, offset)
@@ -220,8 +213,7 @@ _cmd_complt_evt_param_parser = {
 }
 
 class CommandCompleteEvent(HCIEvent):
-    def __init__(self):
-        super(CommandCompleteEvent, self).__init__(bluez.EVT_CMD_COMPLETE)
+    code = bluez.EVT_CMD_COMPLETE
 
     def param_str(self):
         return '({}, 0x{:02x})'.format(self.num_hci_cmd_pkt, self.cmd_opcode)
@@ -237,8 +229,7 @@ class CommandCompleteEvent(HCIEvent):
             raise HCICommandCompleteEventNotImplementedError(self.cmd_opcode)
 
 class CommandStatusEvent(HCIEvent):
-    def __init__(self):
-        super(CommandStatusEvent, self).__init__(bluez.EVT_CMD_STATUS)
+    code = bluez.EVT_CMD_STATUS
 
     def unpack_param(self, buf, offset):
         self.status = letoh8(buf, offset)
@@ -248,8 +239,7 @@ class CommandStatusEvent(HCIEvent):
         self.cmd_opcode = letoh16(buf, offset)
 
 class RoleChangeEvent(HCIEvent):
-    def __init__(self):
-        super(RoleChangeEvent, self).__init__(bluez.EVT_ROLE_CHANGE)
+    code = bluez.EVT_ROLE_CHANGE
 
     def unpack_param(self, buf, offset):
         self.status = letoh8(buf, offset)
@@ -259,8 +249,7 @@ class RoleChangeEvent(HCIEvent):
         self.new_role = letoh8(buf, offset)
 
 class NumberOfCompletedPacketsEvent(HCIEvent):
-    def __init__(self):
-        super(NumberOfCompletedPacketsEvent, self).__init__(bluez.EVT_NUM_COMP_PKTS)
+    code = bluez.EVT_NUM_COMP_PKTS
 
     def unpack_param(self, buf, offset):
         self.num_handles = letoh8(buf, offset)
@@ -274,8 +263,7 @@ class NumberOfCompletedPacketsEvent(HCIEvent):
             offset += 2
 
 class MaxSlotsChangeEvent(HCIEvent):
-    def __init__(self):
-        super(MaxSlotsChangeEvent, self).__init__(bluez.EVT_MAX_SLOTS_CHANGE)
+    code = bluez.EVT_MAX_SLOTS_CHANGE
 
     def unpack_param(self, buf, offset):
         self.conn_handle = letoh16(buf, offset)
@@ -283,9 +271,7 @@ class MaxSlotsChangeEvent(HCIEvent):
         self.lmp_max_slots = letoh8(buf, offset)
 
 class InquiryResultWithRSSIEvent(HCIEvent):
-    def __init__(self):
-        super(InquiryResultWithRSSIEvent, self).__init__(
-                bluez.EVT_INQUIRY_RESULT_WITH_RSSI)
+    code = bluez.EVT_INQUIRY_RESULT_WITH_RSSI
 
     def unpack_param(self, buf, offset):
         num_responses = letoh8(buf, offset)
@@ -314,8 +300,7 @@ class InquiryResultWithRSSIEvent(HCIEvent):
             i += 1
 
 class ReadRemoteExtendedFeaturesCompleteEvent(HCIEvent):
-    def __init__(self):
-        super(ReadRemoteExtendedFeaturesCompleteEvent, self).__init__(bluez.EVT_READ_REMOTE_EXT_FEATURES_COMPLETE)
+    code = bluez.EVT_READ_REMOTE_EXT_FEATURES_COMPLETE
 
     def unpack_param(self, buf, offset):
         self.status = letoh8(buf, offset)
@@ -328,14 +313,13 @@ class ReadRemoteExtendedFeaturesCompleteEvent(HCIEvent):
         offset += 1
         self.ext_lmp_features = buf[offset:offset+8]
 
+
 class LEMetaEvent(HCIEvent):
-    def __init__(self, subevt_code):
-        super(LEMetaEvent, self).__init__(bluez.EVT_LE_META_EVENT)
-        self.subevt_code = subevt_code
+    code = bluez.EVT_LE_META_EVENT
+    subevt_code = 0
 
 class LEConnectionCompleteEvent(LEMetaEvent):
-    def __init__(self):
-        super(LEConnectionCompleteEvent, self).__init__(bluez.EVT_LE_CONN_COMPLETE)
+    subevt_code = bluez.EVT_LE_CONN_COMPLETE
 
     def unpack_param(self, buf, offset):
         self.status = letoh8(buf, offset)
@@ -357,9 +341,7 @@ class LEConnectionCompleteEvent(LEMetaEvent):
         self.master_clk_accuracy = letoh8(buf, offset)
 
 class LEConnectionUpdateCompleteEvent(LEMetaEvent):
-    def __init__(self):
-        super(LEConnectionUpdateCompleteEvent, self).__init__(
-                bluez.EVT_LE_CONN_UPDATE_COMPLETE)
+    subevt_code = bluez.EVT_LE_CONN_UPDATE_COMPLETE
 
     def unpack_param(self, buf, offset):
         self.status = letoh8(buf, offset)
@@ -373,8 +355,7 @@ class LEConnectionUpdateCompleteEvent(LEMetaEvent):
         self.supv_timeout = letoh16(buf, offset)
 
 class LEDataLengthChangeEvent(LEMetaEvent):
-    def __init__(self):
-        super(LEDataLengthChangeEvent, self).__init__(bluez.EVT_LE_DATA_LEN_CHANGE)
+    subevt_code = bluez.EVT_LE_DATA_LEN_CHANGE
 
     def unpack_param(self, buf, offset):
         self.conn_handle = letoh16(buf, offset)
@@ -387,28 +368,39 @@ class LEDataLengthChangeEvent(LEMetaEvent):
         offset += 2
         self.max_rx_time = letoh16(buf, offset)
 
-_evt_table = {
-        bluez.EVT_INQUIRY_COMPLETE: InquiryCompleteEvent,
-        bluez.EVT_CONN_COMPLETE: ConnectionCompleteEvent,
-        bluez.EVT_CONN_REQUEST: ConnectionRequestEvent,
-        bluez.EVT_DISCONN_COMPLETE: DisconnectionCompleteEvent,
-        bluez.EVT_REMOTE_NAME_REQ_COMPLETE: RemoteNameRequestCompleteEvent,
-        bluez.EVT_READ_REMOTE_FEATURES_COMPLETE: ReadRemoteSupportedFeaturesCompleteEvent,
-        bluez.EVT_READ_REMOTE_VERSION_COMPLETE: ReadRemoteVersionInformationCompleteEvent,
-        bluez.EVT_CMD_COMPLETE: CommandCompleteEvent,
-        bluez.EVT_CMD_STATUS: CommandStatusEvent,
-        bluez.EVT_ROLE_CHANGE: RoleChangeEvent,
-        bluez.EVT_NUM_COMP_PKTS: NumberOfCompletedPacketsEvent,
-        bluez.EVT_MAX_SLOTS_CHANGE: MaxSlotsChangeEvent,
-        bluez.EVT_INQUIRY_RESULT_WITH_RSSI: InquiryResultWithRSSIEvent,
-        bluez.EVT_READ_REMOTE_EXT_FEATURES_COMPLETE: ReadRemoteExtendedFeaturesCompleteEvent,
-}
 
-_le_evt_table = {
-        bluez.EVT_LE_CONN_COMPLETE: LEConnectionCompleteEvent,
-        bluez.EVT_LE_DATA_LEN_CHANGE: LEDataLengthChangeEvent,
-        bluez.EVT_LE_CONN_UPDATE_COMPLETE: LEConnectionUpdateCompleteEvent,
-}
+def _gen_evt_table(*args):
+    evt_map = {}
+    for evt in args:
+        evt_map[evt.code] = evt
+    return evt_map
+
+_evt_table = _gen_evt_table(
+        InquiryCompleteEvent,
+        ConnectionCompleteEvent,
+        ConnectionRequestEvent,
+        DisconnectionCompleteEvent,
+        RemoteNameRequestCompleteEvent,
+        ReadRemoteSupportedFeaturesCompleteEvent,
+        ReadRemoteVersionInformationCompleteEvent,
+        CommandCompleteEvent,
+        CommandStatusEvent,
+        RoleChangeEvent,
+        NumberOfCompletedPacketsEvent,
+        MaxSlotsChangeEvent,
+        InquiryResultWithRSSIEvent,
+        ReadRemoteExtendedFeaturesCompleteEvent)
+
+def _gen_le_evt_table(*args):
+    evt_map = {}
+    for evt in args:
+        evt_map[evt.subevt_code] = evt
+    return evt_map
+
+_le_evt_table = _gen_le_evt_table(
+        LEConnectionCompleteEvent,
+        LEDataLengthChangeEvent,
+        LEConnectionUpdateCompleteEvent)
 
 def parse_hci_event(code, buf, offset=0):
     """Parse HCI event.
