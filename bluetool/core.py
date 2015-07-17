@@ -339,6 +339,16 @@ class LEHelper(BTHelper):
         cmd = btcmd.HCILECreateConnectionCancel()
         self.send_hci_cmd_wait_cmd_complt_check_status(cmd)
 
+    def connection_update(self, conn_handle, conn_intvl, conn_latency,
+            supv_timeout, ce_len):
+        cmd = btcmd.HCILEConnectionUpdate(conn_handle, conn_intvl, conn_intvl,
+                conn_latency, supv_timeout, ce_len, ce_len)
+        self.send_hci_cmd_wait_cmd_status_check_status(cmd)
+
+    def set_host_classification(self, channel_map):
+        cmd = btcmd.HCILESetHostChannelClassification(channel_map)
+        self.send_hci_cmd_wait_cmd_complt_check_status(cmd)
+
     def disconnect(self, conn_handle, reason):
         cmd = btcmd.HCIDisconnect(conn_handle, reason)
         self.send_hci_cmd_wait_cmd_status_check_status(cmd)
@@ -366,6 +376,11 @@ class LEHelper(BTHelper):
     def wait_connection_complete(self, timeout=None):
         return self.wait_hci_evt(
                 lambda evt: evt.code == bluez.EVT_LE_META_EVENT and evt.subevt_code == bluez.EVT_LE_CONN_COMPLETE,
+                timeout)
+
+    def wait_connection_update_complete(self, timeout=None):
+        return self.wait_hci_evt(
+                lambda evt: evt.code == bluez.EVT_LE_META_EVENT and evt.subevt_code == bluez.EVT_LE_CONN_UPDATE_COMPLETE,
                 timeout)
 
     def wait_disconnection_complete(self, conn_handle=None, timeout=None):

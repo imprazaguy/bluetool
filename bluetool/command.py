@@ -273,6 +273,38 @@ class HCILERemoveDeviceFromWhiteList(HCILEControllerCommand):
     def pack_param(self):
         return ''.join((htole8(self.addr_type), self.addr))
 
+class HCILEConnectionUpdate(HCILEControllerCommand):
+    def __init__(self, conn_handle, conn_intvl_min, conn_intvl_max,
+            conn_latency, supv_timeout, min_ce_len, max_ce_len):
+        super(HCILEConnectionUpdate, self).__init__(
+                bluez.OCF_LE_CONN_UPDATE)
+        self.conn_handle = conn_handle
+        self.conn_intvl_min = conn_intvl_min
+        self.conn_intvl_max = conn_intvl_max
+        self.conn_latency = conn_latency
+        self.supv_timeout = supv_timeout
+        self.min_ce_len = min_ce_len
+        self.max_ce_len = max_ce_len
+
+    def pack_param(self):
+        return ''.join((
+            htole16(self.conn_handle),
+            htole16(self.conn_intvl_min),
+            htole16(self.conn_intvl_max),
+            htole16(self.conn_latency),
+            htole16(self.supv_timeout),
+            htole16(self.min_ce_len),
+            htole16(self.max_ce_len)))
+
+class HCILESetHostChannelClassification(HCILEControllerCommand):
+    def __init__(self, channel_map):
+        super(HCILESetHostChannelClassification, self).__init__(
+                bluez.OCF_LE_SET_HOST_CHANNEL_CLASSIFICATION)
+        self.channel_map = channel_map
+
+    def pack_param(self):
+        return ''.join((self.channel_map))
+
 class HCILESetDataLength(HCILEControllerCommand):
     def __init__(self, conn_handle, tx_octets, tx_time):
         super(HCILESetDataLength, self).__init__(bluez.OCF_LE_SET_DATA_LEN)

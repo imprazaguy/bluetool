@@ -156,6 +156,11 @@ def _parse_cmd_complt_evt_param_read_inquiry_mode(evt, buf, offset):
     offset += 1
     evt.inquiry_mode = letoh8(buf, offset)
 
+def _parse_cmd_complt_evt_param_read_local_features(evt, buf, offset):
+    evt.status = letoh8(buf, offset)
+    offset += 1
+    evt.lmp_features = buf[offset:offset+8]
+
 def _parse_cmd_complt_evt_param_read_local_ext_features(evt, buf, offset):
     evt.status = letoh8(buf, offset)
     offset += 1
@@ -197,6 +202,7 @@ _cmd_complt_evt_param_parser = {
         0x0C1C: _parse_cmd_complt_evt_param_status,
         0x0C44: _parse_cmd_complt_evt_param_read_inquiry_mode,
         0x0C45: _parse_cmd_complt_evt_param_status,
+        0x1003: _parse_cmd_complt_evt_param_read_local_features,
         0x1004: _parse_cmd_complt_evt_param_read_local_ext_features,
         0x1009: _parse_cmd_complt_evt_param_read_bd_addr,
         0x2001: _parse_cmd_complt_evt_param_status,
@@ -209,6 +215,7 @@ _cmd_complt_evt_param_parser = {
         0x2010: _parse_cmd_complt_evt_param_status,
         0x2011: _parse_cmd_complt_evt_param_status,
         0x2012: _parse_cmd_complt_evt_param_status,
+        0x2014: _parse_cmd_complt_evt_param_status,
         0x2022: _parse_cmd_complt_evt_param_conn_handle,
 }
 
@@ -349,6 +356,22 @@ class LEConnectionCompleteEvent(LEMetaEvent):
         offset += 2
         self.master_clk_accuracy = letoh8(buf, offset)
 
+class LEConnectionUpdateCompleteEvent(LEMetaEvent):
+    def __init__(self):
+        super(LEConnectionUpdateCompleteEvent, self).__init__(
+                bluez.EVT_LE_CONN_UPDATE_COMPLETE)
+
+    def unpack_param(self, buf, offset):
+        self.status = letoh8(buf, offset)
+        offset += 1
+        self.conn_handle = letoh16(buf, offset)
+        offset += 2
+        self.conn_intvl = letoh16(buf, offset)
+        offset += 2
+        self.conn_latency = letoh16(buf, offset)
+        offset += 2
+        self.supv_timeout = letoh16(buf, offset)
+
 class LEDataLengthChangeEvent(LEMetaEvent):
     def __init__(self):
         super(LEDataLengthChangeEvent, self).__init__(bluez.EVT_LE_DATA_LEN_CHANGE)
@@ -384,6 +407,7 @@ _evt_table = {
 _le_evt_table = {
         bluez.EVT_LE_CONN_COMPLETE: LEConnectionCompleteEvent,
         bluez.EVT_LE_DATA_LEN_CHANGE: LEDataLengthChangeEvent,
+        bluez.EVT_LE_CONN_UPDATE_COMPLETE: LEConnectionUpdateCompleteEvent,
 }
 
 def parse_hci_event(code, buf, offset=0):
