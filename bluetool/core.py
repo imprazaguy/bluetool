@@ -116,12 +116,12 @@ class HCITask(object):
 
     def send_hci_cmd_wait_cmd_complt(self, cmd):
         self.send_hci_cmd(cmd)
-        evt = self.wait_hci_evt(lambda evt: evt.code == bluez.EVT_CMD_COMPLETE and evt.cmd_opcode == cmd.opcode)
+        evt = self.wait_hci_evt(lambda evt: evt.code == bluez.EVT_CMD_COMPLETE and evt.cmd_opcode == cmd.opcode())
         return evt
 
     def send_hci_cmd_wait_cmd_status(self, cmd):
         self.send_hci_cmd(cmd)
-        evt = self.wait_hci_evt(lambda evt: evt.code == bluez.EVT_CMD_STATUS and evt.cmd_opcode == cmd.opcode)
+        evt = self.wait_hci_evt(lambda evt: evt.code == bluez.EVT_CMD_STATUS and evt.cmd_opcode == cmd.opcode())
         return evt
 
 class HCIWorker(HCITask, mp.Process):
