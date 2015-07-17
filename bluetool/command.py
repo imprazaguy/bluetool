@@ -2,7 +2,7 @@
 """HCI command.
 """
 from . import bluez
-from .utils import letoh8, htole8, htole16, htole24, htole64
+from .utils import letoh8, letoh16, htole8, htole16, htole24, htole64
 
 
 class HCICommand(object):
@@ -32,6 +32,21 @@ class HCICommand(object):
     @staticmethod
     def parse(buf, offset=0):
         raise NotImplementedError
+
+
+class CmdCompltEvtParamUnpacker(object):
+    """Base helper class to unpack CommandCompleteEvent parameters.
+
+    A specific HCICommand should inherit this class and override
+    unpack_ret_param() to provide its own return parameters in the
+    command complete event.
+    """
+
+    @classmethod
+    def unpack_ret_param(cls, evt, buf, offset):
+        evt.status = letoh8(buf, offset)
+        offset += 1
+        return offset
 
 
 class HCILinkControlCommand(HCICommand):
@@ -97,7 +112,7 @@ class HCIAcceptConnectionRequest(HCILinkControlCommand):
 class HCIControllerCommand(HCICommand):
     ogf = bluez.OGF_HOST_CTL
 
-class HCISetEventMask(HCIControllerCommand):
+class HCISetEventMask(HCIControllerCommand, CmdCompltEvtParamUnpacker):
     ocf = bluez.OCF_SET_EVENT_MASK
 
     def __init__(self, event_mask):
@@ -107,13 +122,46 @@ class HCISetEventMask(HCIControllerCommand):
     def pack_param(self):
         return htole64(self.event_mask)
 
-class HCIReset(HCIControllerCommand):
+class HCIReset(HCIControllerCommand, CmdCompltEvtParamUnpacker):
     ocf = bluez.OCF_RESET
 
-class HCIReadScanEnable(HCIControllerCommand):
+class HCIReadStoredLinkKey(HCIControllerCommand, CmdCompltEvtParamUnpacker):
+    ocf = bluez.OCF_READ_STORED_LINK_KEY
+
+    def __init__(self, bd_addr, read_all_flag):
+        super(HCIReadStoredLinkKey, self).__init__()
+        self.bd_addr = bd_addr
+        self.read_all_flag = read_all_flag
+
+    def pack_param(self):
+        return ''.join((self.bd_addr, htole8(self.read_all_flag)))
+
+    @classmethod
+    def unpack_ret_param(cls, evt, buf, offset):
+        offset = super(HCIReadStoredLinkKey, cls).unpack_ret_param(evt, buf, offset)
+        evt.max_num_keys = letoh16(buf, offset)
+        offset += 2
+        evt.num_keys_read = letoh16(buf, offset)
+
+class HCIWritePageTimeout(HCIControllerCommand, CmdCompltEvtParamUnpacker):
+    ocf = bluez.OCF_WRITE_PAGE_TIMEOUT
+
+    def __init__(self, page_timeout):
+        super(HCIWritePageTimeout, self).__init__()
+        self.page_timeout = page_timeout
+
+    def pack_param(self):
+        return ''.join((htole16(self.page_timeout)))
+
+class HCIReadScanEnable(HCIControllerCommand, CmdCompltEvtParamUnpacker):
     ocf = bluez.OCF_READ_SCAN_ENABLE
 
-class HCIWriteScanEnable(HCIControllerCommand):
+    @classmethod
+    def unpack_ret_param(cls, evt, buf, offset):
+        offset = super(HCIReadScanEnable, cls).unpack_ret_param(evt, buf, offset)
+        evt.scan_enable = letoh8(buf, offset)
+
+class HCIWriteScanEnable(HCIControllerCommand, CmdCompltEvtParamUnpacker):
     ocf = bluez.OCF_WRITE_SCAN_ENABLE
 
     def __init__(self, scan_enable):
@@ -123,7 +171,7 @@ class HCIWriteScanEnable(HCIControllerCommand):
     def pack_param(self):
         return htole8(self.scan_enable)
 
-class HCIWritePageScanActivity(HCIControllerCommand):
+class HCIWritePageScanActivity(HCIControllerCommand, CmdCompltEvtParamUnpacker):
     ocf = bluez.OCF_WRITE_PAGE_ACTIVITY
 
     def __init__(self, page_scan_intvl, page_scan_window):
@@ -136,10 +184,15 @@ class HCIWritePageScanActivity(HCIControllerCommand):
                 (htole16(self.page_scan_intvl),
                     htole16(self.page_scan_window)))
 
-class HCIReadInquiryMode(HCIControllerCommand):
+class HCIReadInquiryMode(HCIControllerCommand, CmdCompltEvtParamUnpacker):
     ocf = bluez.OCF_READ_INQUIRY_MODE
 
-class HCIWriteInquiryMode(HCIControllerCommand):
+    @classmethod
+    def unpack_ret_param(cls, evt, buf, offset):
+        offset = super(HCIReadInquiryMode, cls).unpack_ret_param(evt, buf, offset)
+        evt.inquiry_mode = letoh8(buf, offset)
+
+class HCIWriteInquiryMode(HCIControllerCommand, CmdCompltEvtParamUnpacker):
     ocf = bluez.OCF_WRITE_INQUIRY_MODE
 
     def __init__(self, mode):
@@ -153,14 +206,39 @@ class HCIWriteInquiryMode(HCIControllerCommand):
 class HCIInfoParamCommand(HCICommand):
     ogf = bluez.OGF_INFO_PARAM
 
-class HCIReadBDAddr(HCIInfoParamCommand):
+class HCIReadLocalSupportedFeatures(HCIInfoParamCommand, CmdCompltEvtParamUnpacker):
+    ocf = bluez.OCF_READ_LOCAL_FEATURES
+
+    @classmethod
+    def unpack_ret_param(cls, evt, buf, offset):
+        offset = super(HCIReadLocalSupportedFeatures, cls).unpack_ret_param(evt, buf, offset)
+        evt.lmp_features = buf[offset:offset+8]
+
+class HCIReadLocalExtendedFeatures(HCIInfoParamCommand, CmdCompltEvtParamUnpacker):
+    ocf = bluez.OCF_READ_LOCAL_EXT_FEATURES
+
+    @classmethod
+    def unpack_ret_param(cls, evt, buf, offset):
+        offset = super(HCIReadLocalExtendedFeatures, cls).unpack_ret_param(evt, buf, offset)
+        evt.page_num = letoh8(buf, offset)
+        offset += 1
+        evt.max_page_num = letoh8(buf, offset)
+        offset += 1
+        evt.ext_lmp_features = buf[offset:offset+8]
+
+class HCIReadBDAddr(HCIInfoParamCommand, CmdCompltEvtParamUnpacker):
     ocf = bluez.OCF_READ_BD_ADDR
+
+    @classmethod
+    def unpack_ret_param(cls, evt, buf, offset):
+        offset = super(HCIReadBDAddr, cls).unpack_ret_param(evt, buf, offset)
+        evt.bd_addr = buf[offset:offset+6]
 
 
 class HCILEControllerCommand(HCICommand):
     ogf = bluez.OGF_LE_CTL
 
-class HCILESetEventMask(HCILEControllerCommand):
+class HCILESetEventMask(HCILEControllerCommand, CmdCompltEvtParamUnpacker):
     ocf = bluez.OCF_LE_SET_EVENT_MASK
 
     def __init__(self, le_evt_mask):
@@ -170,10 +248,17 @@ class HCILESetEventMask(HCILEControllerCommand):
     def pack_param(self):
         return htole64(self.le_evt_mask)
 
-class HCILEReadBufferSize(HCILEControllerCommand):
+class HCILEReadBufferSize(HCILEControllerCommand, CmdCompltEvtParamUnpacker):
     ocf = bluez.OCF_LE_READ_BUFFER_SIZE
 
-class HCILESetAdvertisingParameters(HCILEControllerCommand):
+    @classmethod
+    def unpack_ret_param(cls, evt, buf, offset):
+        offset = super(HCILEReadBufferSize, cls).unpack_ret_param(evt, buf, offset)
+        evt.hc_le_acl_data_pkt_len = letoh16(buf, offset)
+        offset += 2
+        evt.hc_total_num_le_acl_data_pkts = letoh8(buf, offset)
+
+class HCILESetAdvertisingParameters(HCILEControllerCommand, CmdCompltEvtParamUnpacker):
     ocf = bluez.OCF_LE_SET_ADVERTISING_PARAMETERS
 
     def __init__(self, adv_intvl_min, adv_intvl_max, adv_type, own_addr_type, direct_addr_type, direct_addr, adv_channel_map, adv_filter_policy):
@@ -198,7 +283,7 @@ class HCILESetAdvertisingParameters(HCILEControllerCommand):
                     htole8(self.adv_channel_map),
                     htole8(self.adv_filter_policy)))
 
-class HCILESetAdvertisingData(HCILEControllerCommand):
+class HCILESetAdvertisingData(HCILEControllerCommand, CmdCompltEvtParamUnpacker):
     ocf = bluez.OCF_LE_SET_ADVERTISING_DATA
 
     def __init__(self, adv_data):
@@ -209,7 +294,7 @@ class HCILESetAdvertisingData(HCILEControllerCommand):
     def pack_param(self):
         return ''.join((htole8(self.adv_data_len), self.adv_data))
 
-class HCILESetAdvertiseEnable(HCILEControllerCommand):
+class HCILESetAdvertiseEnable(HCILEControllerCommand, CmdCompltEvtParamUnpacker):
     ocf = bluez.OCF_LE_SET_ADVERTISE_ENABLE
 
     def __init__(self, adv_enable):
@@ -252,16 +337,21 @@ class HCILECreateConnection(HCILEControllerCommand):
                     htole16(self.min_ce_len),
                     htole16(self.max_ce_len)))
 
-class HCILECreateConnectionCancel(HCILEControllerCommand):
+class HCILECreateConnectionCancel(HCILEControllerCommand, CmdCompltEvtParamUnpacker):
     ocf = bluez.OCF_LE_CREATE_CONN_CANCEL
 
-class HCILEReadWhiteListSize(HCILEControllerCommand):
+class HCILEReadWhiteListSize(HCILEControllerCommand, CmdCompltEvtParamUnpacker):
     ocf = bluez.OCF_LE_READ_WHITE_LIST_SIZE
 
-class HCILEClearWhiteList(HCILEControllerCommand):
+    @classmethod
+    def unpack_ret_param(cls, evt, buf, offset):
+        offset = super(HCILEReadWhiteListSize, cls).unpack_ret_param(evt, buf, offset)
+        evt.wlist_size = letoh8(buf, offset)
+
+class HCILEClearWhiteList(HCILEControllerCommand, CmdCompltEvtParamUnpacker):
     ocf = bluez.OCF_LE_CLEAR_WHITE_LIST
 
-class HCILEAddDeviceToWhiteList(HCILEControllerCommand):
+class HCILEAddDeviceToWhiteList(HCILEControllerCommand, CmdCompltEvtParamUnpacker):
     ocf = bluez.OCF_LE_ADD_DEVICE_TO_WHITE_LIST
 
     def __init__(self, addr_type, addr):
@@ -272,7 +362,7 @@ class HCILEAddDeviceToWhiteList(HCILEControllerCommand):
     def pack_param(self):
         return ''.join((htole8(self.addr_type), self.addr))
 
-class HCILERemoveDeviceFromWhiteList(HCILEControllerCommand):
+class HCILERemoveDeviceFromWhiteList(HCILEControllerCommand, CmdCompltEvtParamUnpacker):
     ocf = bluez.OCF_LE_REMOVE_DEVICE_FROM_WHITE_LIST
 
     def __init__(self, addr_type, addr):
@@ -307,7 +397,7 @@ class HCILEConnectionUpdate(HCILEControllerCommand):
             htole16(self.min_ce_len),
             htole16(self.max_ce_len)))
 
-class HCILESetHostChannelClassification(HCILEControllerCommand):
+class HCILESetHostChannelClassification(HCILEControllerCommand, CmdCompltEvtParamUnpacker):
     ocf = bluez.OCF_LE_SET_HOST_CHANNEL_CLASSIFICATION
 
     def __init__(self, channel_map):
@@ -317,7 +407,7 @@ class HCILESetHostChannelClassification(HCILEControllerCommand):
     def pack_param(self):
         return ''.join((self.channel_map))
 
-class HCILESetDataLength(HCILEControllerCommand):
+class HCILESetDataLength(HCILEControllerCommand, CmdCompltEvtParamUnpacker):
     ocf = bluez.OCF_LE_SET_DATA_LEN
 
     def __init__(self, conn_handle, tx_octets, tx_time):
@@ -330,4 +420,9 @@ class HCILESetDataLength(HCILEControllerCommand):
         return ''.join((htole16(self.conn_handle),
             htole16(self.tx_octets),
             htole16(self.tx_time)))
+
+    @classmethod
+    def unpack_ret_param(cls, evt, buf, offset):
+        offset = super(HCILESetDataLength, cls).unpack_ret_param(evt, buf, offset)
+        evt.conn_handle = letoh16(buf, offset)
 

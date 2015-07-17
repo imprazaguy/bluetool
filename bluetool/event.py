@@ -1,6 +1,7 @@
 """HCI event.
 """
 from . import bluez
+from . import command as btcmd
 from .error import HCIError, HCIParseError, HCIEventNotImplementedError, HCILEEventNotImplementedError, HCICommandCompleteEventNotImplementedError
 from .utils import letoh8, letohs8, letoh16, letoh24
 
@@ -129,88 +130,37 @@ class ReadRemoteVersionInformationCompleteEvent(HCIEvent):
         offset += 2
         self.subversion = letoh16(buf, offset)
 
-def _parse_cmd_complt_evt_param_status(evt, buf, offset):
-    evt.status = letoh8(buf, offset)
+def _gen_cmd_complt_evt_param_parser_table(*args):
+    cmd_map = {}
+    for cmd in args:
+        cmd_map[cmd.opcode()] = cmd
+    return cmd_map
 
-def _parse_cmd_complt_evt_param_read_stored_link_key(evt, buf, offset):
-    evt.status = letoh8(buf, offset)
-    offset += 1
-    evt.max_num_keys = letoh16(buf, offset)
-    offset += 2
-    evt.num_keys_read = letoh16(buf, offset)
-
-def _parse_cmd_complt_evt_param_read_scan_enable(evt, buf, offset):
-    evt.status = letoh8(buf, offset)
-    offset += 1
-    evt.scan_enable = letoh8(buf, offset)
-
-def _parse_cmd_complt_evt_param_read_inquiry_mode(evt, buf, offset):
-    evt.status = letoh8(buf, offset)
-    offset += 1
-    evt.inquiry_mode = letoh8(buf, offset)
-
-def _parse_cmd_complt_evt_param_read_local_features(evt, buf, offset):
-    evt.status = letoh8(buf, offset)
-    offset += 1
-    evt.lmp_features = buf[offset:offset+8]
-
-def _parse_cmd_complt_evt_param_read_local_ext_features(evt, buf, offset):
-    evt.status = letoh8(buf, offset)
-    offset += 1
-    evt.page_num = letoh8(buf, offset)
-    offset += 1
-    evt.max_page_num = letoh8(buf, offset)
-    offset += 1
-    evt.ext_lmp_features = buf[offset:offset+8]
-
-def _parse_cmd_complt_evt_param_read_bd_addr(evt, buf, offset):
-    evt.status = letoh8(buf, offset)
-    offset += 1
-    evt.bd_addr = buf[offset:offset+6]
-
-def _parse_cmd_complt_evt_param_read_white_list_size(evt, buf, offset):
-    evt.status = letoh8(buf, offset)
-    offset += 1
-    evt.wlist_size = letoh8(buf, offset)
-
-def _parse_cmd_complt_evt_param_le_read_buf_size(evt, buf, offset):
-    evt.status = letoh8(buf, offset)
-    offset += 1
-    evt.hc_le_acl_data_pkt_len = letoh16(buf, offset)
-    offset += 2
-    evt.hc_total_num_le_acl_data_pkts = letoh8(buf, offset)
-
-def _parse_cmd_complt_evt_param_conn_handle(evt, buf, offset):
-    evt.status = letoh8(buf, offset)
-    offset += 1
-    evt.conn_handle = letoh16(buf, offset)
-
-_cmd_complt_evt_param_parser = {
-        0x0C01: _parse_cmd_complt_evt_param_status,
-        0x0C03: _parse_cmd_complt_evt_param_status,
-        0x0C0D: _parse_cmd_complt_evt_param_read_stored_link_key,
-        0x0C18: _parse_cmd_complt_evt_param_status,
-        0x0C19: _parse_cmd_complt_evt_param_read_scan_enable,
-        0x0C1A: _parse_cmd_complt_evt_param_status,
-        0x0C1C: _parse_cmd_complt_evt_param_status,
-        0x0C44: _parse_cmd_complt_evt_param_read_inquiry_mode,
-        0x0C45: _parse_cmd_complt_evt_param_status,
-        0x1003: _parse_cmd_complt_evt_param_read_local_features,
-        0x1004: _parse_cmd_complt_evt_param_read_local_ext_features,
-        0x1009: _parse_cmd_complt_evt_param_read_bd_addr,
-        0x2001: _parse_cmd_complt_evt_param_status,
-        0x2002: _parse_cmd_complt_evt_param_le_read_buf_size,
-        0x2006: _parse_cmd_complt_evt_param_status,
-        0x2008: _parse_cmd_complt_evt_param_status,
-        0x200a: _parse_cmd_complt_evt_param_status,
-        0x200e: _parse_cmd_complt_evt_param_status,
-        0x200f: _parse_cmd_complt_evt_param_read_white_list_size,
-        0x2010: _parse_cmd_complt_evt_param_status,
-        0x2011: _parse_cmd_complt_evt_param_status,
-        0x2012: _parse_cmd_complt_evt_param_status,
-        0x2014: _parse_cmd_complt_evt_param_status,
-        0x2022: _parse_cmd_complt_evt_param_conn_handle,
-}
+_cmd_complt_evt_param_parser = _gen_cmd_complt_evt_param_parser_table(
+        btcmd.HCISetEventMask,
+        btcmd.HCIReset,
+        btcmd.HCIReadStoredLinkKey,
+        btcmd.HCIWritePageTimeout,
+        btcmd.HCIReadScanEnable,
+        btcmd.HCIWriteScanEnable,
+        btcmd.HCIWritePageScanActivity,
+        btcmd.HCIReadInquiryMode,
+        btcmd.HCIWriteInquiryMode,
+        btcmd.HCIReadLocalSupportedFeatures,
+        btcmd.HCIReadLocalExtendedFeatures,
+        btcmd.HCIReadBDAddr,
+        btcmd.HCILESetEventMask,
+        btcmd.HCILEReadBufferSize,
+        btcmd.HCILESetAdvertisingParameters,
+        btcmd.HCILESetAdvertisingData,
+        btcmd.HCILESetAdvertiseEnable,
+        btcmd.HCILECreateConnectionCancel,
+        btcmd.HCILEReadWhiteListSize,
+        btcmd.HCILEClearWhiteList,
+        btcmd.HCILEAddDeviceToWhiteList,
+        btcmd.HCILERemoveDeviceFromWhiteList,
+        btcmd.HCILESetHostChannelClassification,
+        btcmd.HCILESetDataLength)
 
 class CommandCompleteEvent(HCIEvent):
     code = bluez.EVT_CMD_COMPLETE
@@ -224,7 +174,7 @@ class CommandCompleteEvent(HCIEvent):
         self.cmd_opcode = letoh16(buf, offset)
         offset += 2
         try:
-            _cmd_complt_evt_param_parser[self.cmd_opcode](self, buf, offset)
+            _cmd_complt_evt_param_parser[self.cmd_opcode].unpack_ret_param(self, buf, offset)
         except KeyError:
             raise HCICommandCompleteEventNotImplementedError(self.cmd_opcode)
 
