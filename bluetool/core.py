@@ -204,6 +204,7 @@ class HCICoordinator(object):
         self.worker = []
         self.pid = os.getpid()
         self.term_worker_queue = mp.Queue()
+        self.log = logging.getLogger('{}.{}'.format(__name__, self.__class__.__name__))
 
     def run(self):
         for w in self.worker:

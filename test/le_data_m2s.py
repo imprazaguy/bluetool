@@ -10,9 +10,10 @@ import bluetool.bluez as bluez
 import bluetool.command as btcmd
 import bluetool.event as btevt
 from bluetool.data import HCIACLData
+from bluetool.utils import bytes2str
 
 CONN_TIMEOUT_MS = 10000
-HCI_ACL_MAX_SIZE = 27
+HCI_ACL_MAX_SIZE = 251
 NUM_ACL_DATA = 1600
 
 class LEDataSender(HCITask):
@@ -115,7 +116,8 @@ class LESlave(HCIWorker):
         self.send(True) # trigger master to send data
 
         # Receive ACL data
-        while True:
+        keep_receive_data = True
+        while keep_receive_data:
             num_acl_data = self.recv()
             if num_acl_data <= 0:
                 break
@@ -124,9 +126,14 @@ class LESlave(HCIWorker):
                 while i < num_acl_data:
                     pkt_type, pkt = self.recv_hci_pkt()
                     if pkt_type == bluez.HCI_ACLDATA_PKT:
-                        i = i + 1
-                        self.send(pkt.data)
-                        succeeded = self.recv() # If data received are correct
+                        self.send(pkt)
+                        status = self.recv() # If data received are correct
+                        if status == 0:
+                            continue
+                        if status < 0:
+                            keep_receive_data = False
+                            break
+                        i += 1
                     else:
                         self.log.info('Ignore ptype: {}, {}'.format(pkt_type, pkt))
             except (HCICommandError, HCITimeoutError):
@@ -171,12 +178,29 @@ class LETester(HCICoordinator):
             for i in xrange(0, num_acl_data):
                 print i, acl[i]
                 self.worker[0].send(acl[i])
-                data_received = self.worker[1].recv()
-                succeeded = (acl[i].data == data_received)
+
+                acl_recv = self.worker[1].recv()
+                acl_data = acl_recv.data
+                if acl_data == acl[i].data:
+                    succeeded = True
+                    self.worker[1].send(1)
+                else:
+                    while True:
+                        self.worker[1].send(0)
+                        acl_recv = self.worker[1].recv()
+                        if acl_recv.pb_flag != 0x1:
+                            succeeded = False
+                            self.worker[1].send(-1)
+                            break
+                        acl_data += acl_recv.data
+                        if acl_data == acl[i].data:
+                            succeeded = True
+                            self.worker[1].send(1)
+                            break
+
                 self.worker[0].send(succeeded)
-                self.worker[1].send(succeeded)
                 if not succeeded:
-                    self.log.warning("incorrect data received: {}".format(data_received))
+                    self.log.warning("incorrect data received: {}".format(bytes2str(acl_data)))
                     break
 
 if __name__ == "__main__":
