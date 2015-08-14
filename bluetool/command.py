@@ -426,3 +426,27 @@ class HCILESetDataLength(HCILEControllerCommand, CmdCompltEvtParamUnpacker):
         offset = super(HCILESetDataLength, cls).unpack_ret_param(evt, buf, offset)
         evt.conn_handle = letoh16(buf, offset)
 
+class HCILEReadSuggestedDefaultDataLength(HCILEControllerCommand, CmdCompltEvtParamUnpacker):
+    ocf = bluez.OCF_LE_READ_DEFAULT_DATA_LEN
+
+    @classmethod
+    def unpack_ret_param(cls, evt, buf, offset):
+        offset = super(HCILEReadSuggestedDefaultDataLength, cls).unpack_ret_param(evt, buf, offset)
+        evt.sug_max_tx_octets = letoh16(buf, offset)
+        offset += 2
+        evt.sug_max_tx_time = letoh16(buf, offset)
+
+class HCILEWriteSuggestedDefaultDataLength(HCILEControllerCommand, CmdCompltEvtParamUnpacker):
+    ocf = bluez.OCF_LE_WRITE_DEFAULT_DATA_LEN
+
+    def __init__(self, sug_max_tx_octets, sug_max_tx_time):
+        super(HCILEWriteSuggestedDefaultDataLength, self).__init__()
+        self.sug_max_tx_octets = sug_max_tx_octets
+        self.sug_max_tx_time = sug_max_tx_time
+
+    def pack_param(self):
+        return ''.join((htole16(self.sug_max_tx_octets), htole16(self.sug_max_tx_time)))
+
+class HCIVendorCommand(HCICommand):
+    ogf = bluez.OGF_VENDOR_CMD
+

@@ -160,7 +160,12 @@ _cmd_complt_evt_param_parser = _gen_cmd_complt_evt_param_parser_table(
         btcmd.HCILEAddDeviceToWhiteList,
         btcmd.HCILERemoveDeviceFromWhiteList,
         btcmd.HCILESetHostChannelClassification,
-        btcmd.HCILESetDataLength)
+        btcmd.HCILESetDataLength,
+        btcmd.HCILEReadSuggestedDefaultDataLength,
+        btcmd.HCILEWriteSuggestedDefaultDataLength)
+
+def register_cmd_complt_evt(hci_cmd):
+    _cmd_complt_evt_param_parser[hci_cmd.opcode()] = hci_cmd
 
 class CommandCompleteEvent(HCIEvent):
     code = bluez.EVT_CMD_COMPLETE
