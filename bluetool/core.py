@@ -85,7 +85,7 @@ class HCISock(object):
     def recv_hci_evt(self, timeout=None):
         ptype, evt = self.recv_hci_pkt(timeout)
         if ptype != bluez.HCI_EVENT_PKT:
-            raise HCIParseError('not an event: ptype: {})'.format(ptype))
+            raise HCIParseError('not an event: ptype: {}'.format(ptype))
         return evt
 
 class HCITask(object):
