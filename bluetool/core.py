@@ -297,6 +297,18 @@ class BREDRHelper(BTHelper):
                 lambda evt: evt.code == bluez.EVT_DISCONN_COMPLETE and (conn_handle is None or conn_handle == evt.conn_handle),
                 timeout)
 
+    def sniff_mode(self, conn_handle, sniff_max_intvl, sniff_min_intvl, sniff_attempt, sniff_timeout):
+        cmd = btcmd.HCISniffMode(conn_handle, sniff_max_intvl, sniff_min_intvl, sniff_attempt, sniff_timeout)
+        return self.send_hci_cmd_wait_cmd_status_check_status(cmd)
+
+    def exit_sniff_mode(self, conn_handle):
+        cmd = btcmd.HCIExitSniffMode(conn_handle)
+        return self.send_hci_cmd_wait_cmd_status_check_status(cmd)
+
+    def write_link_policy(self, conn_handle, policy):
+        cmd = btcmd.HCIWriteLinkPolicySettings(conn_handle, policy)
+        return self.send_hci_cmd_wait_cmd_complt_check_status(cmd)
+
 class LEHelper(BTHelper):
     def __init__(self, hci_sock):
         super(LEHelper, self).__init__(hci_sock)

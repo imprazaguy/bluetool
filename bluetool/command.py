@@ -108,6 +108,55 @@ class HCIAcceptConnectionRequest(HCILinkControlCommand):
     def pack_param(self):
         return ''.join((self.bd_addr, htole8(self.role)))
 
+class HCILinkPolicyCommand(HCICommand):
+    ogf = bluez.OGF_LINK_POLICY
+
+class HCISniffMode(HCILinkPolicyCommand):
+    ocf = bluez.OCF_SNIFF_MODE
+
+    def __init__(self, conn_handle, sniff_max_intvl, sniff_min_intvl, sniff_attempt, sniff_timeout):
+        super(HCISniffMode, self).__init__()
+        self.conn_handle = conn_handle
+        self.sniff_max_intvl = sniff_max_intvl
+        self.sniff_min_intvl = sniff_min_intvl
+        self.sniff_attempt = sniff_attempt
+        self.sniff_timeout = sniff_timeout
+
+    def pack_param(self):
+        return ''.join((
+            htole16(self.conn_handle),
+            htole16(self.sniff_max_intvl),
+            htole16(self.sniff_min_intvl),
+            htole16(self.sniff_attempt),
+            htole16(self.sniff_timeout)))
+
+class HCIExitSniffMode(HCILinkPolicyCommand):
+    ocf = bluez.OCF_EXIT_SNIFF_MODE
+
+    def __init__(self, conn_handle):
+        super(HCIExitSniffMode, self).__init__()
+        self.conn_handle = conn_handle
+
+    def pack_param(self):
+        return ''.join((htole16(self.conn_handle)))
+
+class HCIWriteLinkPolicySettings(HCILinkPolicyCommand, CmdCompltEvtParamUnpacker):
+    ocf = bluez.OCF_WRITE_LINK_POLICY
+
+    def __init__(self, conn_handle, link_policy):
+        super(HCIWriteLinkPolicySettings, self).__init__()
+        self.conn_handle = conn_handle
+        self.link_policy = link_policy
+
+    def pack_param(self):
+        return ''.join((
+            htole16(self.conn_handle),
+            htole16(self.link_policy)))
+
+    @classmethod
+    def unpack_ret_param(cls, evt, buf, offset):
+        offset = super(HCIWriteLinkPolicySettings, cls).unpack_ret_param(evt, buf, offset)
+        evt.conn_handle = letoh16(buf, offset)
 
 class HCIControllerCommand(HCICommand):
     ogf = bluez.OGF_HOST_CTL

@@ -139,6 +139,7 @@ def _gen_cmd_complt_evt_param_parser_table(*args):
 _cmd_complt_evt_param_parser = _gen_cmd_complt_evt_param_parser_table(
         btcmd.HCISetEventMask,
         btcmd.HCIReset,
+        btcmd.HCIWriteLinkPolicySettings,
         btcmd.HCIReadStoredLinkKey,
         btcmd.HCIWritePageTimeout,
         btcmd.HCIReadScanEnable,
@@ -216,6 +217,18 @@ class NumberOfCompletedPacketsEvent(HCIEvent):
             offset += 2
             self.num_completed_pkts[i] = letoh16(buf, offset)
             offset += 2
+
+class ModeChangeEvent(HCIEvent):
+    code = bluez.EVT_MODE_CHANGE
+
+    def unpack_param(self, buf, offset):
+        self.status = letoh8(buf, offset)
+        offset += 1
+        self.conn_handle = letoh16(buf, offset)
+        offset += 2
+        self.cur_mode = letoh8(buf, offset)
+        offset += 1
+        self.intvl = letoh16(buf, offset)
 
 class MaxSlotsChangeEvent(HCIEvent):
     code = bluez.EVT_MAX_SLOTS_CHANGE
@@ -355,6 +368,7 @@ _evt_table = _gen_evt_table(
         CommandStatusEvent,
         RoleChangeEvent,
         NumberOfCompletedPacketsEvent,
+        ModeChangeEvent,
         MaxSlotsChangeEvent,
         PageScanRepetitionModeChangeEvent,
         InquiryResultWithRSSIEvent,
