@@ -257,6 +257,10 @@ class BTHelper(HCITask):
         self.check_hci_evt_status(evt)
         return evt
 
+    def disconnect(self, conn_handle, reason):
+        cmd = btcmd.HCIDisconnect(conn_handle, reason)
+        self.send_hci_cmd_wait_cmd_status_check_status(cmd)
+
 class BREDRHelper(BTHelper):
     def __init__(self, hci_sock):
         super(BREDRHelper, self).__init__(hci_sock)
@@ -349,10 +353,6 @@ class LEHelper(BTHelper):
     def set_host_classification(self, channel_map):
         cmd = btcmd.HCILESetHostChannelClassification(channel_map)
         self.send_hci_cmd_wait_cmd_complt_check_status(cmd)
-
-    def disconnect(self, conn_handle, reason):
-        cmd = btcmd.HCIDisconnect(conn_handle, reason)
-        self.send_hci_cmd_wait_cmd_status_check_status(cmd)
 
     def set_advertising_data(self, data):
         cmd = btcmd.HCILESetAdvertisingData(data)

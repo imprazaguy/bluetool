@@ -225,6 +225,14 @@ class MaxSlotsChangeEvent(HCIEvent):
         offset += 2
         self.lmp_max_slots = letoh8(buf, offset)
 
+class PageScanRepetitionModeChangeEvent(HCIEvent):
+    code = bluez.EVT_PSCAN_REP_MODE_CHANGE
+
+    def unpack_param(self, buf, offset):
+        self.bd_addr = buf[offset:offset+6]
+        offset += 6
+        self.pscan_rep_mode = letoh8(buf, offset)
+
 class InquiryResultWithRSSIEvent(HCIEvent):
     code = bluez.EVT_INQUIRY_RESULT_WITH_RSSI
 
@@ -323,6 +331,11 @@ class LEDataLengthChangeEvent(LEMetaEvent):
         offset += 2
         self.max_rx_time = letoh16(buf, offset)
 
+class VendorEvent(HCIEvent):
+    code = bluez.EVT_VENDOR
+
+    def unpack_param(self, buf, offset):
+        self.param = buf[offset:]
 
 def _gen_evt_table(*args):
     evt_map = {}
@@ -343,8 +356,10 @@ _evt_table = _gen_evt_table(
         RoleChangeEvent,
         NumberOfCompletedPacketsEvent,
         MaxSlotsChangeEvent,
+        PageScanRepetitionModeChangeEvent,
         InquiryResultWithRSSIEvent,
-        ReadRemoteExtendedFeaturesCompleteEvent)
+        ReadRemoteExtendedFeaturesCompleteEvent,
+        VendorEvent)
 
 def _gen_le_evt_table(*args):
     evt_map = {}

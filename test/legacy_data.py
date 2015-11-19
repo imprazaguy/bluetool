@@ -87,11 +87,8 @@ class LegacyMaster(HCIWorker):
             except (HCICommandError, HCITimeoutError):
                 self.log.warning('fail to connect to initiator', exc_info=True)
 
-        try:
-            helper.disconnect(self.conn_handle, 0x13)
-            helper.wait_disconnection_complete(self.conn_handle)
-        finally:
-            helper.remove_device_from_white_list(0, self.peer_addr)
+        helper.disconnect(self.conn_handle, 0x13)
+        helper.wait_disconnection_complete(self.conn_handle)
 
 
 class LegacySlave(HCIWorker):
