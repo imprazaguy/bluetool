@@ -66,10 +66,5 @@ setup(name='bluetool',
             'PyBluez>=0.18'
             ],
 
-        packages=find_packages(),
-        ext_modules=[
-            Extension('bluetool.bluez_ext',
-                sources=['bluetool/bluez_ext.c'],
-                **map_flags2dict(bluez_flags))
-            ],
+        packages=find_packages()
         )
