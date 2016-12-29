@@ -3,7 +3,7 @@
 from . import bluez
 from . import command as btcmd
 from .error import HCIError, HCIParseError, HCIEventNotImplementedError, HCILEEventNotImplementedError, HCICommandCompleteEventNotImplementedError
-from .utils import letoh8, letohs8, letoh16, letoh24
+from .utils import letoh8, letohs8, letoh16, letoh24, letoh64
 
 
 class HCIEvent(object):
@@ -106,6 +106,18 @@ class RemoteNameRequestCompleteEvent(HCIEvent):
         offset += 6
         self.remote_name = buf[offset:]
 
+
+class EncryptionChangeEvent(HCIEvent):
+    code = bluez.EVT_ENCRYPT_CHANGE
+
+    def unpack_param(self, buf, offset):
+        self.status = letoh8(buf, offset)
+        offset += 1
+        self.conn_handle = letoh16(buf, offset)
+        offset += 2
+        self.enc_enabled = letoh8(buf, offset)
+
+
 class ReadRemoteSupportedFeaturesCompleteEvent(HCIEvent):
     code = bluez.EVT_READ_REMOTE_FEATURES_COMPLETE
 
@@ -115,6 +127,7 @@ class ReadRemoteSupportedFeaturesCompleteEvent(HCIEvent):
         self.conn_handle = letoh16(buf, offset)
         offset += 2
         self.lmp_features = buf[offset:offset+8]
+
 
 class ReadRemoteVersionInformationCompleteEvent(HCIEvent):
     code = bluez.EVT_READ_REMOTE_VERSION_COMPLETE
@@ -129,6 +142,7 @@ class ReadRemoteVersionInformationCompleteEvent(HCIEvent):
         self.manu_name = letoh16(buf, offset)
         offset += 2
         self.subversion = letoh16(buf, offset)
+
 
 def _gen_cmd_complt_evt_param_parser_table(*args):
     cmd_map = {}
@@ -161,6 +175,8 @@ _cmd_complt_evt_param_parser = _gen_cmd_complt_evt_param_parser_table(
         btcmd.HCILEAddDeviceToWhiteList,
         btcmd.HCILERemoveDeviceFromWhiteList,
         btcmd.HCILESetHostChannelClassification,
+        btcmd.HCILELongTermKeyRequestReply,
+        btcmd.HCILELongTermKeyRequestNegtiveReply,
         btcmd.HCILESetDataLength,
         btcmd.HCILEReadSuggestedDefaultDataLength,
         btcmd.HCILEWriteSuggestedDefaultDataLength)
@@ -330,6 +346,18 @@ class LEConnectionUpdateCompleteEvent(LEMetaEvent):
         offset += 2
         self.supv_timeout = letoh16(buf, offset)
 
+
+class LELongTermKeyRequestEvent(LEMetaEvent):
+    subevt_code = bluez.EVT_LE_LTK_REQUEST
+
+    def unpack_param(self, buf, offset):
+        self.conn_handle = letoh16(buf, offset)
+        offset += 2
+        self.rand = letoh64(buf, offset)
+        offset += 8
+        self.ediv = letoh16(buf, offset)
+
+
 class LEDataLengthChangeEvent(LEMetaEvent):
     subevt_code = bluez.EVT_LE_DATA_LEN_CHANGE
 
@@ -343,6 +371,34 @@ class LEDataLengthChangeEvent(LEMetaEvent):
         self.max_rx_octets = letoh16(buf, offset)
         offset += 2
         self.max_rx_time = letoh16(buf, offset)
+
+
+class LEEnhancedConnectionCompleteEvent(LEMetaEvent):
+    subevt_code = bluez.EVT_LE_ENHANCED_CONN_COMPLETE
+
+    def unpack_param(self, buf, offset):
+        self.status = letoh8(buf, offset)
+        offset += 1
+        self.conn_handle = letoh16(buf, offset)
+        offset += 2
+        self.role = letoh8(buf, offset)
+        offset += 1
+        self.peer_addr_type = letoh8(buf, offset)
+        offset += 1
+        self.peer_addr = buf[offset:offset+6]
+        offset += 6
+        self.local_rpa = buf[offset:offset+6]
+        offset += 6
+        self.peer_rpa = buf[offset:offset+6]
+        offset += 6
+        self.conn_intvl = letoh16(buf, offset)
+        offset += 2
+        self.conn_latency = letoh16(buf, offset)
+        offset += 2
+        self.supv_timeout = letoh16(buf, offset)
+        offset += 2
+        self.master_clk_accuracy = letoh8(buf, offset)
+
 
 class VendorEvent(HCIEvent):
     code = bluez.EVT_VENDOR
@@ -362,6 +418,7 @@ _evt_table = _gen_evt_table(
         ConnectionRequestEvent,
         DisconnectionCompleteEvent,
         RemoteNameRequestCompleteEvent,
+        EncryptionChangeEvent,
         ReadRemoteSupportedFeaturesCompleteEvent,
         ReadRemoteVersionInformationCompleteEvent,
         CommandCompleteEvent,
@@ -383,8 +440,10 @@ def _gen_le_evt_table(*args):
 
 _le_evt_table = _gen_le_evt_table(
         LEConnectionCompleteEvent,
+        LEConnectionUpdateCompleteEvent,
+        LELongTermKeyRequestEvent,
         LEDataLengthChangeEvent,
-        LEConnectionUpdateCompleteEvent)
+        LEEnhancedConnectionCompleteEvent)
 
 def parse_hci_event(code, buf, offset=0):
     """Parse HCI event.

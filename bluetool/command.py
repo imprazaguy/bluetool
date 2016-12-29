@@ -108,6 +108,18 @@ class HCIAcceptConnectionRequest(HCILinkControlCommand):
     def pack_param(self):
         return ''.join((self.bd_addr, htole8(self.role)))
 
+
+class HCIReadRemoteVersionInformation(HCILinkControlCommand):
+    ocf = bluez.OCF_READ_REMOTE_VERSION
+
+    def __init__(self, conn_handle):
+        super(HCIReadRemoteVersionInformation, self).__init__()
+        self.conn_handle = conn_handle
+
+    def pack_param(self):
+        return ''.join((htole16(self.conn_handle)))
+
+
 class HCILinkPolicyCommand(HCICommand):
     ogf = bluez.OGF_LINK_POLICY
 
@@ -455,6 +467,64 @@ class HCILESetHostChannelClassification(HCILEControllerCommand, CmdCompltEvtPara
 
     def pack_param(self):
         return ''.join((self.channel_map))
+
+
+class HCILEStartEncryption(HCILEControllerCommand):
+    ocf = bluez.OCF_LE_START_ENCRYPTION
+
+    def __init__(self, conn_handle, rand, ediv, ltk):
+        super(HCILEStartEncryption, self).__init__()
+        self.conn_handle = conn_handle
+        self.rand = rand
+        self.ediv = ediv
+        self.ltk = ltk
+
+    def pack_param(self):
+        return ''.join((
+            htole16(self.conn_handle),
+            htole64(self.rand),
+            htole16(self.ediv),
+            self.ltk))
+
+
+class HCILELongTermKeyRequestReply(
+        HCILEControllerCommand, CmdCompltEvtParamUnpacker):
+    ocf = bluez.OCF_LE_LTK_REPLY
+
+    def __init__(self, conn_handle, ltk):
+        super(HCILELongTermKeyRequestReply, self).__init__()
+        self.conn_handle = conn_handle
+        self.ltk = ltk
+
+    def pack_param(self):
+        return ''.join((
+            htole16(self.conn_handle),
+            self.ltk))
+
+    @classmethod
+    def unpack_ret_param(cls, evt, buf, offset):
+        offset = super(HCILELongTermKeyRequestReply, cls).unpack_ret_param(
+            evt, buf, offset)
+        evt.conn_handle = letoh16(buf, offset)
+
+
+class HCILELongTermKeyRequestNegtiveReply(
+        HCILEControllerCommand, CmdCompltEvtParamUnpacker):
+    ocf = bluez.OCF_LE_LTK_NEG_REPLY
+
+    def __init__(self, conn_handle):
+        super(HCILELongTermKeyRequestNegtiveReply, self).__init__()
+        self.conn_handle = conn_handle
+
+    def pack_param(self):
+        return ''.join((htole16(self.conn_handle)))
+
+    @classmethod
+    def unpack_ret_param(cls, evt, buf, offset):
+        offset = super(HCILELongTermKeyRequestNegtiveReply,
+                       cls).unpack_ret_param(evt, buf, offset)
+        evt.conn_handle = letoh16(buf, offset)
+
 
 class HCILESetDataLength(HCILEControllerCommand, CmdCompltEvtParamUnpacker):
     ocf = bluez.OCF_LE_SET_DATA_LEN

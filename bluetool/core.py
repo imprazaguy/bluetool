@@ -110,9 +110,8 @@ class HCITask(object):
         while True:
             evt = self.recv_hci_evt(timeout)
             if evt_matcher(evt):
-                #self.log.info('wait evt: 0x{:02x}'.format(evt.code))
                 return evt
-            self.log.info('ignore event: 0x{:02x}'.format(evt.code))
+            self.log.info('ignore event: {}'.format(str(evt)))
 
     def send_hci_cmd_wait_cmd_complt(self, cmd):
         self.send_hci_cmd(cmd)
@@ -179,6 +178,9 @@ class HCIWorkerProxy(object):
     @property
     def pid(self):
         return self.worker.pid
+
+    def wait(self):
+        self.worker.wait()
 
     def signal(self):
         self.worker.signal()
@@ -388,8 +390,11 @@ class LEHelper(BTHelper):
 
     def wait_connection_complete(self, timeout=None):
         return self.wait_hci_evt(
-                lambda evt: evt.code == bluez.EVT_LE_META_EVENT and evt.subevt_code == bluez.EVT_LE_CONN_COMPLETE,
-                timeout)
+            lambda evt: (
+                evt.code == bluez.EVT_LE_META_EVENT and (
+                    evt.subevt_code == bluez.EVT_LE_CONN_COMPLETE or
+                    evt.subevt_code == bluez.EVT_LE_ENHANCED_CONN_COMPLETE)),
+            timeout)
 
     def wait_connection_update_complete(self, timeout=None):
         return self.wait_hci_evt(
@@ -400,6 +405,13 @@ class LEHelper(BTHelper):
         return self.wait_hci_evt(
                 lambda evt: evt.code == bluez.EVT_DISCONN_COMPLETE and (conn_handle is None or conn_handle == evt.conn_handle),
                 timeout)
+
+    def wait_encryption_change(self, conn_handle=None, timeout=None):
+        return self.wait_hci_evt(
+            lambda evt: (
+                evt.code == bluez.EVT_ENCRYPT_CHANGE
+                and (conn_handle is None or conn_handle == evt.conn_handle)),
+            timeout)
 
     def set_data_len(self, conn_handle, tx_octets):
         # 14 = 1(Preamble) + 4(Access Code) + 2(PDU Header) + 4(MIC) + 3(CRC)
