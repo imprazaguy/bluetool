@@ -14,3 +14,12 @@ def log_to_stream(stream=None):
 
 def log_to_file(filename, mode='a'):
     _log_to_handler(logging.FileHandler, filename, mode)
+
+
+def run_config(cfg, dev_list=None):
+    log_to_stream()
+    coord = cfg['coordinator']()
+    if dev_list is not None:
+        cfg['device'] = dev_list
+    coord.load(cfg)
+    coord.run()

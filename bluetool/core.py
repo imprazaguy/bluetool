@@ -134,10 +134,12 @@ class HCIWorker(HCITask, mp.Process):
     def run(self):
         try:
             self.main()
-        except Exception:
+        except Exception as err:
+            self.log.warning(
+                '{}: {}'.format(err.__class__.__name__, str(err)),
+                exc_info=True)
             self.coord.put_terminated_worker(self.pid)
             os.kill(self.coord.pid, signal.SIGINT)
-            raise
 
     def main(self):
         """Main function of worker object.
@@ -220,6 +222,23 @@ class HCICoordinator(object):
                     w.terminate()
         for w in self.worker:
             w.join()
+
+    def add_worker(self, name, dev_id, worker_type):
+        w = HCIWorkerProxy(dev_id, self, worker_type)
+        self.worker.append(w)
+        setattr(self, name, w)
+
+    def load(self, cfg):
+        workers = cfg['worker']
+        num_workers = len(workers)
+        if 'device' not in cfg:
+            dev_id = range(num_workers)
+        else:
+            dev_id = cfg['device']
+        i = 0
+        for w in workers:
+            self.add_worker(w[0], dev_id[i], w[1])
+            i += 1
 
     def get_terminated_workers(self):
         """Get pids of terminated workers."""
