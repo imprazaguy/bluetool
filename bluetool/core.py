@@ -92,7 +92,7 @@ class HCITask(object):
     def __init__(self, hci_sock):
         super(HCITask, self).__init__()
         self.sock = hci_sock
-        self.log = logging.getLogger('{}.{}'.format(__name__, HCITask))
+        self.log = logging.getLogger('{}.HCITask'.format(__name__))
 
     def send_hci_cmd(self, cmd):
         self.sock.send_hci_cmd(cmd)
@@ -129,7 +129,6 @@ class HCIWorker(HCITask, mp.Process):
         self.coord = coord
         self.pipe = pipe
         self.event = mp.Event()
-        self.log = logging.getLogger('{}.HCIWorker'.format(__name__))
 
     def run(self):
         try:
