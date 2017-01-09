@@ -1,12 +1,11 @@
 #!/usr/bin/env python
 from distutils.spawn import find_executable
-import os
 import subprocess
-import sys
 
 import ez_setup
 ez_setup.use_setuptools()
-from setuptools import setup, find_packages, Extension
+from setuptools import setup, find_packages
+
 
 class ProgramNotFoundError(Exception):
     def __init__(self, progname):
@@ -14,6 +13,7 @@ class ProgramNotFoundError(Exception):
 
     def __str__(self):
         return 'Faild to find program: {}'.format(self.progname)
+
 
 def find_program(prog, required=None):
     exe_path = find_executable(prog)
@@ -23,17 +23,21 @@ def find_program(prog, required=None):
 
 PKG_CONFIG = find_program('pkg-config', True)
 
+
 def pkg_config(pkg):
-    return subprocess.check_output([PKG_CONFIG, '--cflags', '--libs', pkg]).split()
+    return subprocess.check_output(
+        [PKG_CONFIG, '--cflags', '--libs', pkg]).split()
+
 
 def map_flags2dict(*args):
     name_map = {
-            '-D': 'define_macros',
-            '-I': 'include_dirs',
-            '-L': 'library_dirs',
-            '-l': 'libraries'
-            }
+        '-D': 'define_macros',
+        '-I': 'include_dirs',
+        '-L': 'library_dirs',
+        '-l': 'libraries'
+    }
     flag_dict = {}
+
     def set_flag_dict(flag):
         flag_type = flag[:2]
         if flag_type in name_map:
@@ -52,19 +56,24 @@ def map_flags2dict(*args):
         flag_dict[k] = list(set(v))
     return flag_dict
 
+
 bluez_flags = pkg_config('bluez')
 
-setup(name='bluetool',
-        version='0.1',
-        author='Guan-Zhong Huang',
-        author_email='imprazaguy@gmail.com',
-        description='Bluetooth Test Tool',
-        license='MIT',
-        keywords='bluetooth',
+setup(
+    name='bluetool',
+    version='0.1',
+    author='Kuan-Chung Huang',
+    author_email='imprazaguy@gmail.com',
+    description='Bluetooth Test Tool',
+    license='MIT',
+    keywords='bluetooth',
 
-        install_requires=[
-            'PyBluez>=0.18'
-            ],
+    scripts=[
+        'scripts/bluetest'
+    ],
 
-        packages=find_packages()
-        )
+    install_requires=[
+        'PyBluez>=0.18'
+    ],
+    packages=find_packages()
+)

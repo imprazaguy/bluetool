@@ -1,0 +1,102 @@
+#!/usr/bin/env python
+import argparse
+import multiprocessing as mp
+import os
+import re
+import subprocess
+import sys
+
+import bluetool
+
+
+def hciconfig(*args):
+    cmd = ['hciconfig']
+    cmd.extend(args)
+    return subprocess.check_output(cmd)
+
+
+def hci_get_devs():
+    dev_info_lines = hciconfig().splitlines()
+    cur_dev = None
+    devs = {}
+    for line in dev_info_lines:
+        m = re.match('^(hci[0-9]+)', line)
+        if m is not None:
+            cur_dev = m.group(1)
+            devs[cur_dev] = 0
+        if re.search('\\bUP\\b', line) is not None:
+            devs[cur_dev] = 1
+    return devs
+
+
+def hci_ifup(dev):
+    hciconfig(dev, 'up')
+
+
+def hci_ifdown(dev):
+    hciconfig(dev, 'down')
+
+
+def bluetest_setup():
+    devs = hci_get_devs()
+    for dev, enabled in devs.iteritems():
+        if enabled:
+            hci_ifdown(dev)
+
+
+def bluetest_run_file(filename, dev_list=None):
+    p = mp.Process(target=bluetool.run_bluetest, args=(filename, dev_list))
+    p.start()
+    p.join()
+
+
+def bluetest_run_path(paths, dev_list=None):
+    for path in paths:
+        if os.path.isdir(path):
+            for dirpath, dnames, fnames in os.walk(path):
+                for fname in fnames:
+                    mod_name, ext = os.path.splitext(fname)
+                    if ext == '.py':
+                        filename = os.path.join(dirpath, fname)
+                        bluetest_run_file(filename, dev_list)
+        else:
+            bluetest_run_file(path, dev_list)
+
+
+def parse_dev_list(dev_list_str):
+    dev_list = []
+    for devs in dev_list_str.split(','):
+        if devs.isdigit():
+            dev_list.append(int(devs))
+        else:
+            m = re.match('^([0-9]+)-([0-9]+)$', devs)
+            if m is None:
+                raise bluetool.error.Error('unsupported device format string')
+            dev_from = int(m.group(1))
+            dev_to = int(m.group(2))
+            step = 1 if dev_from <= dev_to else -1
+            dev_list.extend(range(dev_from, dev_to + step, step))
+    return dev_list
+
+
+def _parse_cmdline_args(argv):
+    parser = argparse.ArgumentParser(description='Run bluetool test case')
+    parser.add_argument('path', nargs='+', help='Path of test scrtip')
+    parser.add_argument(
+        '-i', '--devices', type=parse_dev_list, default=None,
+        help='Device list (e.g. 0-1,3 means 0,1,3)')
+    return parser.parse_args()
+
+
+def _main(argv=None):
+    if argv is None:
+        argv = sys.argv
+    args = _parse_cmdline_args(argv)
+
+    bluetest_setup()
+    bluetest_run_path(args.path, args.devices)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(_main())

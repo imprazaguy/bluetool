@@ -1,4 +1,7 @@
 import logging
+import os
+
+from . import error
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 
@@ -31,3 +34,17 @@ def run_config(cfg, dev_list=None):
         cfg['device'] = dev_list
     coord.load(cfg)
     coord.run()
+
+
+def run_bluetest(filename, dev_list=None):
+    if not os.path.exists(filename):
+        raise error.TestError('file does not exist: {}'.filename)
+    fname = os.path.basename(filename)
+    mod_name, ext = os.path.splitext(fname)
+    if ext != '.py':
+        raise error.TestError('test file does not have file extension \'.py\'')
+
+    import imp
+    mod = imp.load_source('bluetest', filename)
+    cfg = getattr(mod, 'bluetest')
+    run_config(cfg, dev_list)
