@@ -2,7 +2,8 @@
 """HCI command.
 """
 from . import bluez
-from .utils import letoh8, letoh16, htole8, htole16, htole24, htole64
+from . import error
+from .utils import letoh8, letoh16, htole8, htole16, htole24, htole64, count_bits
 
 
 class HCICommand(object):
@@ -319,10 +320,14 @@ class HCILEReadBufferSize(HCILEControllerCommand, CmdCompltEvtParamUnpacker):
         offset += 2
         evt.hc_total_num_le_acl_data_pkts = letoh8(buf, offset)
 
-class HCILESetAdvertisingParameters(HCILEControllerCommand, CmdCompltEvtParamUnpacker):
+
+class HCILESetAdvertisingParameters(
+        HCILEControllerCommand, CmdCompltEvtParamUnpacker):
     ocf = bluez.OCF_LE_SET_ADVERTISING_PARAMETERS
 
-    def __init__(self, adv_intvl_min, adv_intvl_max, adv_type, own_addr_type, direct_addr_type, direct_addr, adv_channel_map, adv_filter_policy):
+    def __init__(self, adv_intvl_min, adv_intvl_max, adv_type, own_addr_type,
+                 direct_addr_type, direct_addr, adv_channel_map,
+                 adv_filter_policy):
         super(HCILESetAdvertisingParameters, self).__init__()
         self.adv_intvl_min = adv_intvl_min
         self.adv_intvl_max = adv_intvl_max
@@ -334,17 +339,30 @@ class HCILESetAdvertisingParameters(HCILEControllerCommand, CmdCompltEvtParamUnp
         self.adv_filter_policy = adv_filter_policy
 
     def pack_param(self):
-        return ''.join(
-                (htole16(self.adv_intvl_min),
-                    htole16(self.adv_intvl_max),
-                    htole8(self.adv_type),
-                    htole8(self.own_addr_type),
-                    htole8(self.direct_addr_type),
-                    self.direct_addr,
-                    htole8(self.adv_channel_map),
-                    htole8(self.adv_filter_policy)))
+        return ''.join((
+            htole16(self.adv_intvl_min),
+            htole16(self.adv_intvl_max),
+            htole8(self.adv_type),
+            htole8(self.own_addr_type),
+            htole8(self.direct_addr_type),
+            self.direct_addr,
+            htole8(self.adv_channel_map),
+            htole8(self.adv_filter_policy)))
 
-class HCILESetAdvertisingData(HCILEControllerCommand, CmdCompltEvtParamUnpacker):
+
+class HCILEReadAdvertisingChannelTxPower(
+        HCILEControllerCommand, CmdCompltEvtParamUnpacker):
+    ocf = bluez.OCF_LE_READ_ADVERTISING_CHANNEL_TX_POWER
+
+    @classmethod
+    def unpack_ret_param(cls, evt, buf, offset):
+        offset = super(HCILEReadAdvertisingChannelTxPower,
+                       cls).unpack_ret_param(evt, buf, offset)
+        evt.transmit_power_level = letoh8(buf, offset)
+
+
+class HCILESetAdvertisingData(
+        HCILEControllerCommand, CmdCompltEvtParamUnpacker):
     ocf = bluez.OCF_LE_SET_ADVERTISING_DATA
 
     def __init__(self, adv_data):
@@ -355,7 +373,23 @@ class HCILESetAdvertisingData(HCILEControllerCommand, CmdCompltEvtParamUnpacker)
     def pack_param(self):
         return ''.join((htole8(self.adv_data_len), self.adv_data))
 
-class HCILESetAdvertiseEnable(HCILEControllerCommand, CmdCompltEvtParamUnpacker):
+
+class HCILESetScanResponseData(
+        HCILEControllerCommand, CmdCompltEvtParamUnpacker):
+    ocf = bluez.OCF_LE_SET_SCAN_RESPONSE_DATA
+
+    def __init__(self, scan_rsp_data):
+        super(HCILESetScanResponseData, self).__init__()
+        self.scan_rsp_data_len = len(scan_rsp_data)
+        self.scan_rsp_data = ''.join((
+            scan_rsp_data, '\x00'*(31 - self.scan_rsp_data_len)))
+
+    def pack_param(self):
+        return ''.join((htole8(self.scan_rsp_data_len), self.scan_rsp_data))
+
+
+class HCILESetAdvertiseEnable(
+        HCILEControllerCommand, CmdCompltEvtParamUnpacker):
     ocf = bluez.OCF_LE_SET_ADVERTISE_ENABLE
 
     def __init__(self, adv_enable):
@@ -365,10 +399,50 @@ class HCILESetAdvertiseEnable(HCILEControllerCommand, CmdCompltEvtParamUnpacker)
     def pack_param(self):
         return htole8(self.adv_enable)
 
+
+class HCILESetScanParameters(
+        HCILEControllerCommand, CmdCompltEvtParamUnpacker):
+    ocf = bluez.OCF_LE_SET_SCAN_PARAMETERS
+
+    def __init__(self, scan_type, scan_intvl, scan_window, own_addr_type,
+                 scan_filter_policy):
+        super(HCILESetScanParameters, self).__init__()
+        self.scan_type = scan_type
+        self.scan_intvl = scan_intvl
+        self.scan_window = scan_window
+        self.own_addr_type = own_addr_type
+        self.scan_filter_policy = scan_filter_policy
+
+    def pack_param(self):
+        return ''.join((
+            htole8(self.scan_type),
+            htole16(self.scan_intvl),
+            htole16(self.scan_window),
+            htole8(self.own_addr_type),
+            htole8(self.scan_filter_policy)))
+
+
+class HCILESetScanEnable(HCILEControllerCommand, CmdCompltEvtParamUnpacker):
+    ocf = bluez.OCF_LE_SET_SCAN_ENABLE
+
+    def __init__(self, enable, filter_duplicate):
+        super(HCILESetScanEnable, self).__init__()
+        self.enable = enable
+        self.filter_duplicate = filter_duplicate
+
+    def pack_param(self):
+        return ''.join((
+            htole8(self.enable),
+            htole8(self.filter_duplicate)))
+
+
 class HCILECreateConnection(HCILEControllerCommand):
     ocf = bluez.OCF_LE_CREATE_CONN
 
-    def __init__(self, scan_intvl, scan_win, init_filter_policy, peer_addr_type, peer_addr, own_addr_type, conn_intvl_min, conn_intvl_max, conn_latency, supv_timeout, min_ce_len, max_ce_len):
+    def __init__(self, scan_intvl, scan_win, init_filter_policy,
+                 peer_addr_type, peer_addr, own_addr_type, conn_intvl_min,
+                 conn_intvl_max, conn_latency, supv_timeout, min_ce_len,
+                 max_ce_len):
         super(HCILECreateConnection, self).__init__()
         self.scan_intvl = scan_intvl
         self.scan_win = scan_win
@@ -384,19 +458,20 @@ class HCILECreateConnection(HCILEControllerCommand):
         self.max_ce_len = max_ce_len
 
     def pack_param(self):
-        return ''.join(
-                (htole16(self.scan_intvl),
-                    htole16(self.scan_win),
-                    htole8(self.init_filter_policy),
-                    htole8(self.peer_addr_type),
-                    self.peer_addr,
-                    htole8(self.own_addr_type),
-                    htole16(self.conn_intvl_min),
-                    htole16(self.conn_intvl_max),
-                    htole16(self.conn_latency),
-                    htole16(self.supv_timeout),
-                    htole16(self.min_ce_len),
-                    htole16(self.max_ce_len)))
+        return ''.join((
+            htole16(self.scan_intvl),
+            htole16(self.scan_win),
+            htole8(self.init_filter_policy),
+            htole8(self.peer_addr_type),
+            self.peer_addr,
+            htole8(self.own_addr_type),
+            htole16(self.conn_intvl_min),
+            htole16(self.conn_intvl_max),
+            htole16(self.conn_latency),
+            htole16(self.supv_timeout),
+            htole16(self.min_ce_len),
+            htole16(self.max_ce_len)))
+
 
 class HCILECreateConnectionCancel(HCILEControllerCommand, CmdCompltEvtParamUnpacker):
     ocf = bluez.OCF_LE_CREATE_CONN_CANCEL
@@ -566,6 +641,281 @@ class HCILEWriteSuggestedDefaultDataLength(HCILEControllerCommand, CmdCompltEvtP
     def pack_param(self):
         return ''.join((htole16(self.sug_max_tx_octets), htole16(self.sug_max_tx_time)))
 
+
+class HCILESetExtendedAdvertisingParameters(
+        HCILEControllerCommand, CmdCompltEvtParamUnpacker):
+    ocf = bluez.OCF_LE_SET_EXT_ADVERTISING_PARAMETERS
+
+    def __init__(self, adv_handle, adv_evt_prop, pri_adv_intvl_min,
+                 pri_adv_intvl_max, pri_adv_ch_map, own_addr_type,
+                 peer_addr_type, peer_addr, adv_filter_policy, adv_tx_power,
+                 pri_adv_phy, sec_adv_max_skip, sec_adv_phy, adv_sid,
+                 scan_req_notif_enable):
+        super(HCILESetExtendedAdvertisingParameters, self).__init__()
+        self.adv_handle = adv_handle
+        self.adv_evt_prop = adv_evt_prop
+        self.pri_adv_intvl_min = pri_adv_intvl_min
+        self.pri_adv_intvl_max = pri_adv_intvl_max
+        self.pri_adv_ch_map = pri_adv_ch_map
+        self.own_addr_type = own_addr_type
+        self.peer_addr_type = peer_addr_type
+        self.peer_addr = peer_addr
+        self.adv_filter_policy = adv_filter_policy
+        self.adv_tx_power = adv_tx_power
+        self.pri_adv_phy = pri_adv_phy
+        self.sec_adv_max_skip = sec_adv_max_skip
+        self.sec_adv_phy = sec_adv_phy
+        self.adv_sid = adv_sid
+        self.scan_req_notif_enable = scan_req_notif_enable
+
+    def pack_param(self):
+        return ''.join((
+            htole8(self.adv_handle),
+            htole16(self.adv_evt_prop),
+            htole24(self.pri_adv_intvl_min),
+            htole24(self.pri_adv_intvl_max),
+            htole8(self.pri_adv_ch_map),
+            htole8(self.own_addr_type),
+            htole8(self.peer_addr_type),
+            self.peer_addr,
+            htole8(self.adv_filter_policy),
+            htole8(self.adv_tx_power),
+            htole8(self.pri_adv_phy),
+            htole8(self.sec_adv_max_skip),
+            htole8(self.sec_adv_phy),
+            htole8(self.adv_sid),
+            htole8(self.scan_req_notif_enable)))
+
+    @classmethod
+    def unpack_ret_param(cls, evt, buf, offset):
+        offset = super(HCILESetExtendedAdvertisingParameters,
+                       cls).unpack_ret_param(evt, buf, offset)
+        evt.selected_tx_power = letoh8(buf, offset)
+
+
+class HCILESetExtendedAdvertisingData(
+        HCILEControllerCommand, CmdCompltEvtParamUnpacker):
+    ocf = bluez.OCF_LE_SET_EXT_ADVERTISING_DATA
+
+    def __init__(self, adv_handle, operation, frag_pref, adv_data):
+        super(HCILESetExtendedAdvertisingData, self).__init__()
+        self.adv_handle = adv_handle
+        self.operation = operation
+        self.frag_pref = frag_pref
+        self.adv_data_len = len(adv_data)
+        self.adv_data = adv_data
+
+    def pack_param(self):
+        return ''.join((
+            htole8(self.adv_handle),
+            htole8(self.operation),
+            htole8(self.frag_pref),
+            htole8(self.adv_data_len),
+            self.adv_data))
+
+
+class HCILESetExtendedScanResponseData(
+        HCILEControllerCommand, CmdCompltEvtParamUnpacker):
+    ocf = bluez.OCF_LE_SET_EXT_SCAN_RESPONSE_DATA
+
+    def __init__(self, adv_handle, operation, frag_pref, scan_rsp_data):
+        super(HCILESetExtendedScanResponseData, self).__init__()
+        self.adv_handle = adv_handle
+        self.operation = operation
+        self.frag_pref = frag_pref
+        self.scan_rsp_data_len = len(scan_rsp_data)
+        self.scan_rsp_data = scan_rsp_data
+
+    def pack_param(self):
+        return ''.join((
+            htole8(self.adv_handle),
+            htole8(self.operation),
+            htole8(self.frag_pref),
+            htole8(self.scan_rsp_data_len),
+            self.scan_rsp_data))
+
+
+class HCILESetExtendedAdvertisingEnable(
+        HCILEControllerCommand, CmdCompltEvtParamUnpacker):
+    ocf = bluez.OCF_LE_SET_EXT_ADVERTISING_ENABLE
+
+    class AdvSetParam(object):
+        def __init__(self, adv_handle, duration, max_ext_adv_events):
+            self.adv_handle = adv_handle
+            self.duration = duration
+            self.max_ext_adv_events = max_ext_adv_events
+
+        def pack_param(self):
+            return ''.join((
+                htole8(self.adv_handle),
+                htole16(self.duration),
+                htole8(self.max_ext_adv_events)))
+
+    def __init__(self, enable, num_sets, *args):
+        super(HCILESetExtendedAdvertisingEnable, self).__init__()
+        if len(args) != 3 * num_sets:
+            raise error.HCIInvalidCommandParametersError(self)
+        self.enable = enable
+        self.num_sets = num_sets
+        self.adv_set = [None] * num_sets
+        for i in xrange(0, num_sets):
+            self.adv_set[i] = HCILESetExtendedAdvertisingEnable.AdvEnableParam(
+                args[3 * i], args[3 * i + 1], args[3 * i + 2])
+
+    def pack_param(self):
+        return ''.join((
+            htole8(self.enable),
+            htole8(self.num_sets),
+            ''.join(o.pack_param() for o in self.adv_set)))
+
+
+class HCILEReadMaximumAdvertisingDataLength(
+        HCILEControllerCommand, CmdCompltEvtParamUnpacker):
+    ocf = bluez.OCF_LE_READ_MAX_ADVERTISING_DATA_LEN
+
+    @classmethod
+    def unpack_ret_param(cls, evt, buf, offset):
+        offset = super(HCILEReadMaximumAdvertisingDataLength,
+                       cls).unpack_ret_param(evt, buf, offset)
+        evt.max_adv_data_len = letoh16(buf, offset)
+
+
+class HCILEReadNumberOfSupportedAdvertisingSets(
+        HCILEControllerCommand, CmdCompltEvtParamUnpacker):
+    ocf = bluez.OCF_LE_READ_NUM_SUPPORTED_ADVERTISING_SETS
+
+    @classmethod
+    def unpack_ret_param(cls, evt, buf, offset):
+        offset = super(HCILEReadNumberOfSupportedAdvertisingSets,
+                       cls).unpack_ret_param(evt, buf, offset)
+        evt.num_supported_adv_sets = letoh8(buf, offset)
+
+
+class HCILERemoveAdvertisingSet(
+        HCILEControllerCommand, CmdCompltEvtParamUnpacker):
+    ocf = bluez.OCF_LE_REMOVE_ADVERTISING_SET
+
+    def __init__(self, adv_handle):
+        super(HCILERemoveAdvertisingSet, self).__init__()
+        self.adv_handle = adv_handle
+
+    def pack_param(self):
+        return ''.join((htole8(self.adv_handle)))
+
+
+class HCILEClearAdvertisingSets(
+        HCILEControllerCommand, CmdCompltEvtParamUnpacker):
+    ocf = bluez.OCF_LE_CLEAR_ADVERTISING_SET
+
+
+class HCILESetExtendedScanParameters(
+        HCILEControllerCommand, CmdCompltEvtParamUnpacker):
+    ocf = bluez.OCF_LE_SET_EXT_SCAN_PARAMETERS
+
+    class ScanPhyParam(object):
+        def __init__(self, scan_type, scan_intvl, scan_window):
+            self.scan_type = scan_type
+            self.scan_intvl = scan_intvl
+            self.scan_window = scan_window
+
+        def pack_param(self):
+            return ''.join((
+                htole8(self.scan_type),
+                htole16(self.scan_intvl),
+                htole16(self.scan_window)))
+
+    def __init__(self, own_addr_type, scan_filter_policy, scan_phys, *args):
+        super(HCILESetExtendedScanParameters, self).__init__()
+        num_scan_phys = count_bits(scan_phys)
+        if len(args) != 3 * num_scan_phys:
+            raise error.HCIInvalidCommandParametersError(self)
+        self.own_addr_type = own_addr_type
+        self.scan_filter_policy = scan_filter_policy
+        self.scan_phys = scan_phys
+        self.scan_param = [None] * num_scan_phys
+        for i in xrange(0, num_scan_phys):
+            self.scan_param[i] = HCILESetExtendedScanParameters.ScanPhyParam(
+                *args[3 * i:3 * (i + 1)])
+
+    def pack_param(self):
+        return ''.join((
+            htole8(self.own_addr_type),
+            htole8(self.scan_filter_policy),
+            htole8(self.scan_phys),
+            ''.join(o.pack_param() for o in self.scan_param)))
+
+
+class HCILESetExtendedScanEnable(
+        HCILEControllerCommand, CmdCompltEvtParamUnpacker):
+    ocf = bluez.OCF_LE_SET_EXT_SCAN_ENABLE
+
+    def __init__(self, enable, filter_duplicate, duration, period):
+        super(HCILESetExtendedScanEnable, self).__init__()
+        self.enable = enable
+        self.filter_duplicate = filter_duplicate
+        self.duration = duration
+        self.period = period
+
+    def pack_param(self):
+        return ''.join((
+            htole8(self.enable),
+            htole8(self.filter_duplicate),
+            htole16(self.duration),
+            htole16(self.period)))
+
+
+class HCILEExtendedCreateConnection(HCILEControllerCommand):
+    ocf = bluez.OCF_LE_EXT_CREATE_CONN
+
+    class InitPhyParam(object):
+        def __init__(self, scan_intvl, scan_window, conn_intvl_min,
+                     conn_intvl_max, conn_latency, supv_timeout, min_ce_len,
+                     max_ce_len):
+            self.scan_intvl = scan_intvl
+            self.scan_window = scan_window
+            self.conn_intvl_min = conn_intvl_min
+            self.conn_intvl_max = conn_intvl_max
+            self.conn_latency = conn_latency
+            self.supv_timeout = supv_timeout
+            self.min_ce_len = min_ce_len
+            self.max_ce_len = max_ce_len
+
+        def pack_param(self):
+            return ''.join((
+                htole16(self.scan_intvl),
+                htole16(self.scan_window),
+                htole16(self.conn_intvl_min),
+                htole16(self.conn_intvl_max),
+                htole16(self.conn_latency),
+                htole16(self.supv_timeout),
+                htole16(self.min_ce_len),
+                htole16(self.max_ce_len)))
+
+    def __init__(self, init_filter_policy, own_addr_type, peer_addr_type,
+                 peer_addr, init_phys, *args):
+        super(HCILEExtendedCreateConnection, self).__init__()
+        num_init_phys = count_bits(init_phys)
+        if len(args) != 8 * num_init_phys:
+            raise error.HCIInvalidCommandParametersError(self)
+        self.init_filter_policy = init_filter_policy
+        self.own_addr_type = own_addr_type
+        self.peer_addr_type = peer_addr_type
+        self.peer_addr = peer_addr
+        self.init_phys = init_phys
+        self.init_param = [None] * num_init_phys
+        for i in xrange(0, num_init_phys):
+            self.init_param[i] = HCILEExtendedCreateConnection.InitPhyParam(
+                *args[8 * i:8 * (i + 1)])
+
+    def pack_param(self):
+        return ''.join((
+            htole8(self.init_filter_policy),
+            htole8(self.own_addr_type),
+            htole8(self.peer_addr_type),
+            self.peer_addr,
+            htole8(self.init_phys),
+            ''.join(o.pack_param() for o in self.init_param)))
+
+
 class HCIVendorCommand(HCICommand):
     ogf = bluez.OGF_VENDOR_CMD
-

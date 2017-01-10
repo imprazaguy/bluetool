@@ -46,6 +46,13 @@ class HCICommandError(HCIError):
                     hci_evt.status))
 
 
+class HCIInvalidCommandParametersError(HCIError):
+    def __init__(self, hci_cmd):
+        super(HCIInvalidCommandParametersError, self).__init__(
+            '{} failure: invalid command parameters'.format(
+                hci_cmd.__class__.__name__))
+
+
 class TestError(Error):
     def __init__(self, msg):
         super(TestError, self).__init__(msg)
