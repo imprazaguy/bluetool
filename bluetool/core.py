@@ -8,7 +8,6 @@ import signal
 
 from . import bluez
 from . import command as btcmd
-from . import event as btevt
 from .command import HCICommand, HCIReadBDAddr
 from .data import HCIACLData, HCISCOData
 from .error import HCICommandError, HCIParseError, HCITimeoutError
@@ -17,22 +16,25 @@ from .utils import letoh8
 
 
 _pkt_table = {
-        bluez.HCI_COMMAND_PKT: HCICommand,
-        bluez.HCI_ACLDATA_PKT: HCIACLData,
-        bluez.HCI_SCODATA_PKT: HCISCOData,
-        bluez.HCI_EVENT_PKT: HCIEvent,
+    bluez.HCI_COMMAND_PKT: HCICommand,
+    bluez.HCI_ACLDATA_PKT: HCIACLData,
+    bluez.HCI_SCODATA_PKT: HCISCOData,
+    bluez.HCI_EVENT_PKT: HCIEvent,
 }
+
 
 def get_hci_pkt_size(buf, offset=0):
     ptype = letoh8(buf, offset)
     offset += 1
     return 1 + _pkt_table[ptype].get_pkt_size(buf, offset)
 
+
 def parse_hci_pkt(buf, offset=0):
     ptype = letoh8(buf, offset)
     offset += 1
     pkt = _pkt_table[ptype].parse(buf, offset)
     return (ptype, pkt)
+
 
 class HCISock(object):
     def __init__(self, dev_id):
@@ -45,7 +47,7 @@ class HCISock(object):
     def __del__(self):
         self.poll.unregister(self.sock)
         self.sock.close()
-    
+
     def fileno(self):
         return self.sock.fileno()
 
@@ -58,7 +60,7 @@ class HCISock(object):
 
     def send_acl_data(self, acl):
         bluez.hci_send_acl(self.sock, acl.conn_handle, acl.pb_flag,
-                acl.bc_flag, acl.data)
+                           acl.bc_flag, acl.data)
 
     def recv_hci_pkt(self, timeout=None):
         """Receive a HCI packet.
@@ -88,6 +90,7 @@ class HCISock(object):
             raise HCIParseError('not an event: ptype: {}'.format(ptype))
         return evt
 
+
 class HCITask(object):
     def __init__(self, hci_sock):
         super(HCITask, self).__init__()
@@ -115,13 +118,20 @@ class HCITask(object):
 
     def send_hci_cmd_wait_cmd_complt(self, cmd):
         self.send_hci_cmd(cmd)
-        evt = self.wait_hci_evt(lambda evt: evt.code == bluez.EVT_CMD_COMPLETE and evt.cmd_opcode == cmd.opcode())
+        evt = self.wait_hci_evt(
+            lambda evt: (
+                evt.code == bluez.EVT_CMD_COMPLETE
+                and evt.cmd_opcode == cmd.opcode()))
         return evt
 
     def send_hci_cmd_wait_cmd_status(self, cmd):
         self.send_hci_cmd(cmd)
-        evt = self.wait_hci_evt(lambda evt: evt.code == bluez.EVT_CMD_STATUS and evt.cmd_opcode == cmd.opcode())
+        evt = self.wait_hci_evt(
+            lambda evt: (
+                evt.code == bluez.EVT_CMD_STATUS
+                and evt.cmd_opcode == cmd.opcode()))
         return evt
+
 
 class HCIWorker(HCITask, mp.Process):
     def __init__(self, hci_sock, coord, pipe):
@@ -142,7 +152,7 @@ class HCIWorker(HCITask, mp.Process):
 
     def main(self):
         """Main function of worker object.
-        
+
         Subclass should implement this method to provide main function.
         """
         raise NotImplementedError
@@ -160,6 +170,7 @@ class HCIWorker(HCITask, mp.Process):
     def recv(self):
         return self.pipe.recv()
 
+
 class ReadBDAddrTask(HCITask):
     def __init__(self, hci_sock):
         super(ReadBDAddrTask, self).__init__(hci_sock)
@@ -168,6 +179,7 @@ class ReadBDAddrTask(HCITask):
         cmd = HCIReadBDAddr()
         evt = self.send_hci_cmd_wait_cmd_complt(cmd)
         return evt.bd_addr
+
 
 class HCIWorkerProxy(object):
     def __init__(self, dev_id, coord, worker_type, *args):
@@ -201,13 +213,15 @@ class HCIWorkerProxy(object):
     def terminate(self):
         self.worker.terminate()
 
+
 class HCICoordinator(object):
     def __init__(self):
         super(HCICoordinator, self).__init__()
         self.worker = []
         self.pid = os.getpid()
         self.term_worker_queue = mp.Queue()
-        self.log = logging.getLogger('{}.{}'.format(__name__, self.__class__.__name__))
+        self.log = logging.getLogger(
+            '{}.{}'.format(__name__, self.__class__.__name__))
 
     def run(self):
         for w in self.worker:
@@ -254,10 +268,11 @@ class HCICoordinator(object):
 
     def main(self):
         """Main function of coordinator object.
-        
+
         Subclass should implement this method to provide main function.
         """
         raise NotImplementedError
+
 
 class BTHelper(HCITask):
     def __init__(self, hci_sock):
@@ -281,6 +296,7 @@ class BTHelper(HCITask):
         cmd = btcmd.HCIDisconnect(conn_handle, reason)
         self.send_hci_cmd_wait_cmd_status_check_status(cmd)
 
+
 class BREDRHelper(BTHelper):
     def __init__(self, hci_sock):
         super(BREDRHelper, self).__init__(hci_sock)
@@ -303,22 +319,28 @@ class BREDRHelper(BTHelper):
         self.send_hci_cmd_wait_cmd_status_check_status(cmd)
 
     def accept_connection(self, timeout=None):
-        evt = self.wait_hci_evt(lambda evt: evt.code == bluez.EVT_CONN_REQUEST, timeout)
+        evt = self.wait_hci_evt(
+            lambda evt: evt.code == bluez.EVT_CONN_REQUEST,
+            timeout)
         cmd = btcmd.HCIAcceptConnectionRequest(evt.bd_addr, 0x01)
         self.send_hci_cmd_wait_cmd_status_check_status(cmd)
 
     def wait_connection_complete(self, timeout=None):
         return self.wait_hci_evt(
-                lambda evt: evt.code == bluez.EVT_CONN_COMPLETE,
-                timeout)
+            lambda evt: evt.code == bluez.EVT_CONN_COMPLETE,
+            timeout)
 
     def wait_disconnection_complete(self, conn_handle=None, timeout=None):
         return self.wait_hci_evt(
-                lambda evt: evt.code == bluez.EVT_DISCONN_COMPLETE and (conn_handle is None or conn_handle == evt.conn_handle),
-                timeout)
+            lambda evt: (
+                evt.code == bluez.EVT_DISCONN_COMPLETE
+                and (conn_handle is None or conn_handle == evt.conn_handle)),
+            timeout)
 
-    def sniff_mode(self, conn_handle, sniff_max_intvl, sniff_min_intvl, sniff_attempt, sniff_timeout):
-        cmd = btcmd.HCISniffMode(conn_handle, sniff_max_intvl, sniff_min_intvl, sniff_attempt, sniff_timeout)
+    def sniff_mode(self, conn_handle, sniff_max_intvl, sniff_min_intvl,
+                   sniff_attempt, sniff_timeout):
+        cmd = btcmd.HCISniffMode(conn_handle, sniff_max_intvl, sniff_min_intvl,
+                                 sniff_attempt, sniff_timeout)
         return self.send_hci_cmd_wait_cmd_status_check_status(cmd)
 
     def exit_sniff_mode(self, conn_handle):
@@ -328,6 +350,7 @@ class BREDRHelper(BTHelper):
     def write_link_policy(self, conn_handle, policy):
         cmd = btcmd.HCIWriteLinkPolicySettings(conn_handle, policy)
         return self.send_hci_cmd_wait_cmd_complt_check_status(cmd)
+
 
 class LEHelper(BTHelper):
     def __init__(self, hci_sock):
@@ -342,7 +365,24 @@ class LEHelper(BTHelper):
         cmd = btcmd.HCISetEventMask(0x20001FFFFFFFFFFFL)
         self.send_hci_cmd_wait_cmd_complt_check_status(cmd)
 
-        cmd = btcmd.HCILESetEventMask(0x7ff)
+        evt_mask = 0x000000000000001FL
+        cmd = btcmd.HCILEReadLocalSupportedFeatures()
+        evt = self.send_hci_cmd_wait_cmd_complt_check_status(cmd)
+        if evt.le_features & 0x2:  # conn param request procedure
+            evt_mask |= 0x20
+        if evt.le_features & 0x20:  # LE data length extension
+            evt_mask |= 0x40
+        if evt.le_features & 0x40:  # LL privacy
+            evt_mask |= 0x780
+        if evt.le_features & 0x900:  # LE 2M or Coded PHY
+            evt_mask |= 0x800
+        if evt.le_features & 0x1000:  # LE extended advertising
+            evt_mask |= 0x71000
+        if evt.le_features & 0x2000:  # LE periodic advertising
+            evt_mask |= 0xE000
+        if evt.le_features & 0x4000:  # channel selection algo 2
+            evt_mask |= 0x80000
+        cmd = btcmd.HCILESetEventMask(evt_mask)
         self.send_hci_cmd_wait_cmd_complt_check_status(cmd)
 
         cmd = btcmd.HCILEClearWhiteList()
@@ -360,16 +400,20 @@ class LEHelper(BTHelper):
         cmd = btcmd.HCILERemoveDeviceFromWhiteList(peer_addr_type, peer_addr)
         self.send_hci_cmd_wait_cmd_complt_check_status(cmd)
 
-    def create_connection_by_peer_addr(self, peer_addr_type, peer_addr, conn_intvl, conn_latency, supv_to, ce_len):
-        cmd = btcmd.HCILECreateConnection(self.init_scan_intvl,
-                self.init_scan_win, 0, peer_addr_type, peer_addr, 0,
-                conn_intvl, conn_intvl, conn_latency, supv_to, ce_len, ce_len)
+    def create_connection_by_peer_addr(self, peer_addr_type, peer_addr,
+                                       conn_intvl, conn_latency, supv_to,
+                                       ce_len):
+        cmd = btcmd.HCILECreateConnection(
+            self.init_scan_intvl, self.init_scan_win, 0, peer_addr_type,
+            peer_addr, 0, conn_intvl, conn_intvl, conn_latency, supv_to,
+            ce_len, ce_len)
         self.send_hci_cmd_wait_cmd_status_check_status(cmd)
 
-    def create_connection_by_white_list(self, conn_intvl, conn_latency, supv_to, ce_len):
-        cmd = btcmd.HCILECreateConnection(self.init_scan_intvl,
-                self.init_scan_win, 1, 0, '\x00'*6, 0, conn_intvl, conn_intvl,
-                conn_latency, supv_to, ce_len, ce_len)
+    def create_connection_by_white_list(self, conn_intvl, conn_latency,
+                                        supv_to, ce_len):
+        cmd = btcmd.HCILECreateConnection(
+            self.init_scan_intvl, self.init_scan_win, 1, 0, '\x00'*6, 0,
+            conn_intvl, conn_intvl, conn_latency, supv_to, ce_len, ce_len)
         self.send_hci_cmd_wait_cmd_status_check_status(cmd)
 
     def create_connect_cancel(self):
@@ -377,9 +421,10 @@ class LEHelper(BTHelper):
         self.send_hci_cmd_wait_cmd_complt_check_status(cmd)
 
     def connection_update(self, conn_handle, conn_intvl, conn_latency,
-            supv_timeout, ce_len):
-        cmd = btcmd.HCILEConnectionUpdate(conn_handle, conn_intvl, conn_intvl,
-                conn_latency, supv_timeout, ce_len, ce_len)
+                          supv_timeout, ce_len):
+        cmd = btcmd.HCILEConnectionUpdate(
+            conn_handle, conn_intvl, conn_intvl, conn_latency, supv_timeout,
+            ce_len, ce_len)
         self.send_hci_cmd_wait_cmd_status_check_status(cmd)
 
     def set_host_classification(self, channel_map):
@@ -391,7 +436,8 @@ class LEHelper(BTHelper):
         self.send_hci_cmd_wait_cmd_complt_check_status(cmd)
 
     def start_advertising(self, intvl):
-        cmd = btcmd.HCILESetAdvertisingParameters(intvl, intvl, 0, 0, 0, '\x00'*6, 0x7, 0)
+        cmd = btcmd.HCILESetAdvertisingParameters(
+            intvl, intvl, 0, 0, 0, '\x00'*6, 0x7, 0)
         self.send_hci_cmd_wait_cmd_complt_check_status(cmd)
 
         cmd = btcmd.HCILESetAdvertiseEnable(1)
@@ -403,8 +449,10 @@ class LEHelper(BTHelper):
 
     def wait_le_event(self, subevt_code, timeout=None):
         return self.wait_hci_evt(
-                lambda evt: evt.code == bluez.EVT_LE_META_EVENT and evt.subevt_code == subevt_code,
-                timeout)
+            lambda evt: (
+                evt.code == bluez.EVT_LE_META_EVENT
+                and evt.subevt_code == subevt_code),
+            timeout)
 
     def wait_connection_complete(self, timeout=None):
         return self.wait_hci_evt(
@@ -416,13 +464,17 @@ class LEHelper(BTHelper):
 
     def wait_connection_update_complete(self, timeout=None):
         return self.wait_hci_evt(
-                lambda evt: evt.code == bluez.EVT_LE_META_EVENT and evt.subevt_code == bluez.EVT_LE_CONN_UPDATE_COMPLETE,
-                timeout)
+            lambda evt: (
+                evt.code == bluez.EVT_LE_META_EVENT
+                and evt.subevt_code == bluez.EVT_LE_CONN_UPDATE_COMPLETE),
+            timeout)
 
     def wait_disconnection_complete(self, conn_handle=None, timeout=None):
         return self.wait_hci_evt(
-                lambda evt: evt.code == bluez.EVT_DISCONN_COMPLETE and (conn_handle is None or conn_handle == evt.conn_handle),
-                timeout)
+            lambda evt: (
+                evt.code == bluez.EVT_DISCONN_COMPLETE
+                and (conn_handle is None or conn_handle == evt.conn_handle)),
+            timeout)
 
     def wait_encryption_change(self, conn_handle=None, timeout=None):
         return self.wait_hci_evt(
@@ -436,4 +488,3 @@ class LEHelper(BTHelper):
         tx_time = (tx_octets + 14) * 8
         cmd = btcmd.HCILESetDataLength(conn_handle, tx_octets, tx_time)
         self.send_hci_cmd_wait_cmd_complt_check_status(cmd)
-

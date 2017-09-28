@@ -2,14 +2,16 @@
 """
 from . import bluez
 from . import command as btcmd
-from .error import HCIError, HCIParseError, HCIEventNotImplementedError, HCILEEventNotImplementedError, HCICommandCompleteEventNotImplementedError
+from .error import (HCIError, HCIParseError, HCIEventNotImplementedError,
+                    HCILEEventNotImplementedError,
+                    HCICommandCompleteEventNotImplementedError)
 from .utils import letoh8, letohs8, letoh16, letoh24, letoh64
 
 
 class HCIEvent(object):
     """Base HCI event object."""
 
-    code = 0 # Event code
+    code = 0  # Event code
 
     def __str__(self):
         return '{}{}'.format(self.__class__.__name__, self.param_str())
@@ -27,7 +29,7 @@ class HCIEvent(object):
     @staticmethod
     def parse(buf, offset=0):
         """Parse HCI event.
-        
+
         offset is the start offset of event packet.
         """
         avail_len = len(buf) - offset
@@ -35,7 +37,7 @@ class HCIEvent(object):
         offset += 1
         plen = letoh8(buf, offset)
         offset += 1
-        if avail_len  < 2 + plen:
+        if avail_len < 2 + plen:
             raise HCIParseError('not enough data to parse')
         try:
             if code == bluez.EVT_LE_META_EVENT:
@@ -56,11 +58,13 @@ class HCIEvent(object):
             print str(err)
             return HCIEvent(code)
 
+
 class InquiryCompleteEvent(HCIEvent):
     code = bluez.EVT_INQUIRY_COMPLETE
 
     def unpack_param(self, buf, offset):
         self.status = letoh8(buf, offset)
+
 
 class ConnectionCompleteEvent(HCIEvent):
     code = bluez.EVT_CONN_COMPLETE
@@ -76,6 +80,7 @@ class ConnectionCompleteEvent(HCIEvent):
         offset += 1
         self.enc_enabled = letoh8(buf, offset)
 
+
 class ConnectionRequestEvent(HCIEvent):
     code = bluez.EVT_CONN_REQUEST
 
@@ -86,6 +91,7 @@ class ConnectionRequestEvent(HCIEvent):
         offset += 3
         self.link_type = letoh8(buf, offset)
 
+
 class DisconnectionCompleteEvent(HCIEvent):
     code = bluez.EVT_DISCONN_COMPLETE
 
@@ -95,6 +101,7 @@ class DisconnectionCompleteEvent(HCIEvent):
         self.conn_handle = letoh16(buf, offset)
         offset += 2
         self.reason = letoh8(buf, offset)
+
 
 class RemoteNameRequestCompleteEvent(HCIEvent):
     code = bluez.EVT_REMOTE_NAME_REQ_COMPLETE
@@ -166,6 +173,7 @@ _cmd_complt_evt_param_parser = _gen_cmd_complt_evt_param_parser_table(
     btcmd.HCIReadBDAddr,
     btcmd.HCILESetEventMask,
     btcmd.HCILEReadBufferSize,
+    btcmd.HCILEReadLocalSupportedFeatures,
     btcmd.HCILESetAdvertisingParameters,
     btcmd.HCILEReadAdvertisingChannelTxPower,
     btcmd.HCILESetAdvertisingData,
@@ -213,9 +221,11 @@ class CommandCompleteEvent(HCIEvent):
         self.cmd_opcode = letoh16(buf, offset)
         offset += 2
         try:
-            _cmd_complt_evt_param_parser[self.cmd_opcode].unpack_ret_param(self, buf, offset)
+            _cmd_complt_evt_param_parser[self.cmd_opcode].unpack_ret_param(
+                self, buf, offset)
         except KeyError:
             raise HCICommandCompleteEventNotImplementedError(self.cmd_opcode)
+
 
 class CommandStatusEvent(HCIEvent):
     code = bluez.EVT_CMD_STATUS
@@ -227,6 +237,7 @@ class CommandStatusEvent(HCIEvent):
         offset += 1
         self.cmd_opcode = letoh16(buf, offset)
 
+
 class RoleChangeEvent(HCIEvent):
     code = bluez.EVT_ROLE_CHANGE
 
@@ -236,6 +247,7 @@ class RoleChangeEvent(HCIEvent):
         self.bd_addr = buf[offset:offset+6]
         offset += 6
         self.new_role = letoh8(buf, offset)
+
 
 class NumberOfCompletedPacketsEvent(HCIEvent):
     code = bluez.EVT_NUM_COMP_PKTS
@@ -251,6 +263,7 @@ class NumberOfCompletedPacketsEvent(HCIEvent):
             self.num_completed_pkts[i] = letoh16(buf, offset)
             offset += 2
 
+
 class ModeChangeEvent(HCIEvent):
     code = bluez.EVT_MODE_CHANGE
 
@@ -263,6 +276,7 @@ class ModeChangeEvent(HCIEvent):
         offset += 1
         self.intvl = letoh16(buf, offset)
 
+
 class MaxSlotsChangeEvent(HCIEvent):
     code = bluez.EVT_MAX_SLOTS_CHANGE
 
@@ -271,6 +285,7 @@ class MaxSlotsChangeEvent(HCIEvent):
         offset += 2
         self.lmp_max_slots = letoh8(buf, offset)
 
+
 class PageScanRepetitionModeChangeEvent(HCIEvent):
     code = bluez.EVT_PSCAN_REP_MODE_CHANGE
 
@@ -278,6 +293,7 @@ class PageScanRepetitionModeChangeEvent(HCIEvent):
         self.bd_addr = buf[offset:offset+6]
         offset += 6
         self.pscan_rep_mode = letoh8(buf, offset)
+
 
 class InquiryResultWithRSSIEvent(HCIEvent):
     code = bluez.EVT_INQUIRY_RESULT_WITH_RSSI
@@ -308,6 +324,7 @@ class InquiryResultWithRSSIEvent(HCIEvent):
             offset += 1
             i += 1
 
+
 class ReadRemoteExtendedFeaturesCompleteEvent(HCIEvent):
     code = bluez.EVT_READ_REMOTE_EXT_FEATURES_COMPLETE
 
@@ -326,6 +343,7 @@ class ReadRemoteExtendedFeaturesCompleteEvent(HCIEvent):
 class LEMetaEvent(HCIEvent):
     code = bluez.EVT_LE_META_EVENT
     subevt_code = 0
+
 
 class LEConnectionCompleteEvent(LEMetaEvent):
     subevt_code = bluez.EVT_LE_CONN_COMPLETE
@@ -348,6 +366,7 @@ class LEConnectionCompleteEvent(LEMetaEvent):
         self.supv_timeout = letoh16(buf, offset)
         offset += 2
         self.master_clk_accuracy = letoh8(buf, offset)
+
 
 class LEConnectionUpdateCompleteEvent(LEMetaEvent):
     subevt_code = bluez.EVT_LE_CONN_UPDATE_COMPLETE
@@ -417,11 +436,21 @@ class LEEnhancedConnectionCompleteEvent(LEMetaEvent):
         self.master_clk_accuracy = letoh8(buf, offset)
 
 
+class LEChannelSelectionAlgorithmEvent(LEMetaEvent):
+    subevt_code = bluez.EVT_LE_CH_SEL_ALGO
+
+    def unpack_param(self, buf, offset):
+        self.conn_handle = letoh16(buf, offset)
+        offset += 2
+        self.ch_sel_algo = letoh8(buf)
+
+
 class VendorEvent(HCIEvent):
     code = bluez.EVT_VENDOR
 
     def unpack_param(self, buf, offset):
         self.param = buf[offset:]
+
 
 def _gen_evt_table(*args):
     evt_map = {}
@@ -429,25 +458,28 @@ def _gen_evt_table(*args):
         evt_map[evt.code] = evt
     return evt_map
 
+
 _evt_table = _gen_evt_table(
-        InquiryCompleteEvent,
-        ConnectionCompleteEvent,
-        ConnectionRequestEvent,
-        DisconnectionCompleteEvent,
-        RemoteNameRequestCompleteEvent,
-        EncryptionChangeEvent,
-        ReadRemoteSupportedFeaturesCompleteEvent,
-        ReadRemoteVersionInformationCompleteEvent,
-        CommandCompleteEvent,
-        CommandStatusEvent,
-        RoleChangeEvent,
-        NumberOfCompletedPacketsEvent,
-        ModeChangeEvent,
-        MaxSlotsChangeEvent,
-        PageScanRepetitionModeChangeEvent,
-        InquiryResultWithRSSIEvent,
-        ReadRemoteExtendedFeaturesCompleteEvent,
-        VendorEvent)
+    InquiryCompleteEvent,
+    ConnectionCompleteEvent,
+    ConnectionRequestEvent,
+    DisconnectionCompleteEvent,
+    RemoteNameRequestCompleteEvent,
+    EncryptionChangeEvent,
+    ReadRemoteSupportedFeaturesCompleteEvent,
+    ReadRemoteVersionInformationCompleteEvent,
+    CommandCompleteEvent,
+    CommandStatusEvent,
+    RoleChangeEvent,
+    NumberOfCompletedPacketsEvent,
+    ModeChangeEvent,
+    MaxSlotsChangeEvent,
+    PageScanRepetitionModeChangeEvent,
+    InquiryResultWithRSSIEvent,
+    ReadRemoteExtendedFeaturesCompleteEvent,
+    VendorEvent
+)
+
 
 def _gen_le_evt_table(*args):
     evt_map = {}
@@ -456,15 +488,18 @@ def _gen_le_evt_table(*args):
     return evt_map
 
 _le_evt_table = _gen_le_evt_table(
-        LEConnectionCompleteEvent,
-        LEConnectionUpdateCompleteEvent,
-        LELongTermKeyRequestEvent,
-        LEDataLengthChangeEvent,
-        LEEnhancedConnectionCompleteEvent)
+    LEConnectionCompleteEvent,
+    LEConnectionUpdateCompleteEvent,
+    LELongTermKeyRequestEvent,
+    LEDataLengthChangeEvent,
+    LEEnhancedConnectionCompleteEvent,
+    LEChannelSelectionAlgorithmEvent
+)
+
 
 def parse_hci_event(code, buf, offset=0):
     """Parse HCI event.
-    
+
     offset is the start offset of event parameters.
     """
     if code == bluez.EVT_LE_META_EVENT:
@@ -475,4 +510,3 @@ def parse_hci_event(code, buf, offset=0):
         evt = _evt_table[code]()
     evt.unpack_param(buf, offset)
     return evt
-
