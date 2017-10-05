@@ -95,7 +95,8 @@ class HCITask(object):
     def __init__(self, hci_sock):
         super(HCITask, self).__init__()
         self.sock = hci_sock
-        self.log = logging.getLogger('{}.HCITask'.format(__name__))
+        self.log = logging.getLogger(
+            '{}.{}'.format(__name__, self.__class__.__name__))
 
     def send_hci_cmd(self, cmd):
         self.sock.send_hci_cmd(cmd)
@@ -157,8 +158,9 @@ class HCIWorker(HCITask, mp.Process):
         """
         raise NotImplementedError
 
-    def wait(self):
-        self.event.wait()
+    def wait(self, timeout=None):
+        if not self.event.wait(timeout):
+            raise HCITimeoutError
         self.event.clear()
 
     def signal(self):
@@ -167,7 +169,10 @@ class HCIWorker(HCITask, mp.Process):
     def send(self, obj):
         self.pipe.send(obj)
 
-    def recv(self):
+    def recv(self, timeout=None):
+        if timeout is not None:
+            if not self.pipe.poll(timeout):
+                raise HCITimeoutError
         return self.pipe.recv()
 
 
