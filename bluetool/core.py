@@ -235,13 +235,16 @@ class HCICoordinator(object):
             ret = self.main()
             if ret is None:
                 ret = 0
+            for w in self.worker:
+                w.join()
         except KeyboardInterrupt:
             term_workers = self.get_terminated_workers()
             for w in self.worker:
                 if w.pid not in term_workers:
                     w.terminate()
-        for w in self.worker:
-            w.join()
+            for w in self.worker:
+                w.join()
+            ret = 1
         return ret
 
     def add_worker(self, name, dev_id, worker_type):
