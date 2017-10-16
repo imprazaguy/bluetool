@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 import argparse
-import multiprocessing as mp
 import os
 import re
 import subprocess
@@ -49,12 +48,11 @@ def bluetest_setup(log_level):
 
 
 def bluetest_run_file(filename, dev_list=None):
-    p = mp.Process(target=bluetool.run_bluetest, args=(filename, dev_list))
-    p.start()
-    p.join()
+    return bluetool.run_bluetest(filename, dev_list)
 
 
 def bluetest_run_path(paths, dev_list=None):
+    ret = 0
     for path in paths:
         if os.path.isdir(path):
             for dirpath, dnames, fnames in os.walk(path):
@@ -62,9 +60,10 @@ def bluetest_run_path(paths, dev_list=None):
                     mod_name, ext = os.path.splitext(fname)
                     if ext == '.py':
                         filename = os.path.join(dirpath, fname)
-                        bluetest_run_file(filename, dev_list)
+                        ret |= bluetest_run_file(filename, dev_list)
         else:
-            bluetest_run_file(path, dev_list)
+            ret |= bluetest_run_file(path, dev_list)
+    return ret
 
 
 def parse_dev_list(dev_list_str):
@@ -108,8 +107,7 @@ def _main(argv=None):
     args = _parse_cmdline_args(argv)
 
     bluetest_setup(args.log_level)
-    bluetest_run_path(args.path, args.devices)
-    return 0
+    return bluetest_run_path(args.path, args.devices)
 
 
 if __name__ == "__main__":

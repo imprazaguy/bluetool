@@ -33,7 +33,7 @@ def run_config(cfg, dev_list=None):
     if dev_list is not None:
         cfg['device'] = dev_list
     coord.load(cfg)
-    coord.run()
+    return coord.run()
 
 
 def run_bluetest(filename, dev_list=None):
@@ -47,4 +47,4 @@ def run_bluetest(filename, dev_list=None):
     import imp
     mod = imp.load_source('bluetest', filename)
     cfg = getattr(mod, 'bluetest')
-    run_config(cfg, dev_list)
+    return run_config(cfg, dev_list)

@@ -232,7 +232,9 @@ class HCICoordinator(object):
         for w in self.worker:
             w.start()
         try:
-            self.main()
+            ret = self.main()
+            if ret is None:
+                ret = 0
         except KeyboardInterrupt:
             term_workers = self.get_terminated_workers()
             for w in self.worker:
@@ -240,6 +242,7 @@ class HCICoordinator(object):
                     w.terminate()
         for w in self.worker:
             w.join()
+        return ret
 
     def add_worker(self, name, dev_id, worker_type):
         w = HCIWorkerProxy(dev_id, self, worker_type)
@@ -275,6 +278,8 @@ class HCICoordinator(object):
         """Main function of coordinator object.
 
         Subclass should implement this method to provide main function.
+        This method can return zero as success and non-zero value as failure.
+        If no value is returned, it is considered zero.
         """
         raise NotImplementedError
 
