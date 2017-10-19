@@ -167,9 +167,19 @@ class HCIWorker(HCITask, mp.Process):
         self.event.set()
 
     def send(self, obj):
+        """Send an object to the corresponding coordinator."""
         self.pipe.send(obj)
 
     def recv(self, timeout=None):
+        """Receive an object sent from the corresponding coordinator.
+
+        Args:
+            timeout: Maximum time in seconds to block. If timeout is None,
+                then an infinite timeout is used.
+
+        Raises:
+            HCITimeoutError: Raised if timeout occurs.
+        """
         if timeout is not None:
             if not self.pipe.poll(timeout):
                 raise HCITimeoutError
@@ -204,9 +214,22 @@ class HCIWorkerProxy(object):
         self.worker.signal()
 
     def send(self, obj):
+        """Send an object to the corresponding worker."""
         self.pipe.send(obj)
 
-    def recv(self):
+    def recv(self, timeout=None):
+        """Receive an object sent from the corresponding worker
+
+        Args:
+            timeout: Maximum time in seconds to block. If timeout is None,
+                then an infinite timeout is used.
+
+        Raises:
+            HCITimeoutError: Raised if timeout occurs.
+        """
+        if timeout is not None:
+            if not self.pipe.poll(timeout):
+                raise HCITimeoutError
         return self.pipe.recv()
 
     def start(self):
@@ -285,6 +308,120 @@ class HCICoordinator(object):
         If no value is returned, it is considered zero.
         """
         raise NotImplementedError
+
+
+HCI_DATA_TRANS_COMPLETED = 1
+HCI_DATA_TRANS_CONTINUED = 0
+HCI_DATA_TRANS_FAILED = -1
+
+
+class HCIDataTransWorker(HCIWorker):
+    def test_acl_trans_send(self, timeout=None):
+        """Test sending ACL data
+
+        Args:
+            timeout: Timeout value in seconds to block. If timeout is None,
+                then infinite timeout is used.
+        """
+        num_acl_data = self.recv(timeout)
+        for i in xrange(0, num_acl_data):
+            data = self.recv(timeout)
+            self.send_acl_data(data)
+            succeeded = self.recv(timeout)  # if receiver gets correct data
+            if not succeeded:
+                break
+
+    def test_acl_trans_recv(self, timeout=None):
+        """Test receiving ACL data
+
+        Args:
+            timeout: Timeout value in seconds to block. If timeout is None,
+                then infinite timeout is used.
+        """
+        timeout_ms = timeout * 1000
+        num_acl_data = self.recv(timeout)
+        i = 0
+        while i < num_acl_data:
+            pkt_type, pkt = self.recv_hci_pkt(timeout_ms)
+            if pkt_type == bluez.HCI_ACLDATA_PKT:
+                self.send(pkt)
+                status = self.recv(timeout)
+                if status == HCI_DATA_TRANS_CONTINUED:
+                    continue
+                if status == HCI_DATA_TRANS_FAILED:
+                    break
+                i += 1
+            else:
+                self.log.info(
+                    'Ignore ptype: {}, {}'.format(pkt_type, pkt))
+
+
+class HCIDataTransCoordinator(HCICoordinator):
+    def create_test_acl_data(self, conn_handle, num_acl_data=1, acl_size=27):
+        data = [None]*num_acl_data
+        data_i = 0
+        for i in xrange(0, num_acl_data):
+            data[i] = HCIACLData(
+                conn_handle, 0x0, 0x0,
+                ''.join(chr(c & 0xff)
+                        for c in xrange(data_i, data_i + acl_size)))
+            data_i = (data_i + 1) % 256
+        return data
+
+    def test_acl_trans(self, send_worker, recv_worker, recv_conn_handle,
+                       acl_list, timeout=None):
+        """Test ACL data transmission from send_worker to recv_worker.
+
+        Args:
+            send_worker: Worker to send ACL data.
+            recv_worker: Worker to receive ACL data.
+            recv_conn_handle: Connection handle of link for recv_worker.
+            acl_list: List of ACL data.
+            timeout:  Timeout value in seconds. If timeout is None, infinite
+                timeout is used.
+
+        Returns:
+            bool: True for success; otherwise, False.
+
+        Raises:
+            HCITimeoutError: Raised if timeout occurs.
+        """
+        num_acl_data = len(acl_list)
+        send_worker.send(num_acl_data)
+        recv_worker.send(num_acl_data)
+
+        for acl in acl_list:
+            send_worker.send(acl)
+
+            acl_recv = recv_worker.recv(timeout)
+            acl_data = acl_recv.data
+            if (acl_recv.conn_handle == recv_conn_handle
+                    and acl_data == acl.data):
+                succeeded = True
+                recv_worker.send(HCI_DATA_TRANS_COMPLETED)
+            else:
+                while True:
+                    recv_worker.send(HCI_DATA_TRANS_CONTINUED)
+                    acl_recv = recv_worker.recv(timeout)
+                    if acl_recv.conn_handle != recv_conn_handle:
+                        continue
+                    if acl_recv.pb_flag != 0x1:
+                        succeeded = False
+                        recv_worker.send(HCI_DATA_TRANS_FAILED)
+                        break
+                    acl_data += acl_recv.data
+                    if acl_data == acl.data:
+                        succeeded = True
+                        recv_worker.send(HCI_DATA_TRANS_COMPLETED)
+                        break
+
+            send_worker.send(succeeded)
+            if not succeeded:
+                self.log.warning(
+                    "incorrect data received: {}".format(str(acl_recv)))
+                break
+
+        return succeeded
 
 
 class BTHelper(HCITask):

@@ -1,7 +1,7 @@
-# TP/CON/MAS/BV-39-C [Master Data Length Update - maximum Receive Data Channel
+# TP/CON/SLA/BV-36-C [Slave Data Length Update - minimum Receive Data Channel
 # PDU length and time]
 #
-# Verify that the IUT as Master correctly handles reception of an LL_LENGTH_REQ
+# Verify that the IUT as Slave correctly handles reception of an LL_LENGTH_REQ
 # PDU
 
 import bluetool
@@ -31,12 +31,40 @@ btevt.register_cmd_complt_evt(HCIVendorWriteLocalMaxRxOctets)
 
 class IUT(HCIDataTransWorker):
     def main(self):
+        helper = LEHelper(self.sock)
+
+        helper.reset()
+        cmd = btcmd.HCILEWriteSuggestedDefaultDataLength(100, (100+14)*8)
+        helper.send_hci_cmd_wait_cmd_complt_check_status(cmd)
+
+        helper.start_advertising(0xA0)
+        evt = helper.wait_connection_complete()
+        if evt.status != 0:
+            raise bterr.TestError(
+                'connection fail: status: 0x{:02x}'.format(evt.status))
+        self.log.info('connect to %s', bytes2str(evt.peer_addr))
+        conn_handle = evt.conn_handle
+        helper.wait_le_event(bluez.EVT_LE_DATA_LEN_CHANGE)
+
+        self.send(conn_handle)
+
+        helper.wait_le_event(bluez.EVT_LE_DATA_LEN_CHANGE)
+        self.wait()  # Wait lower tester to finish data length update
+
+        self.test_acl_trans_recv(CONN_TIMEOUT_MS / 1000)
+
+        helper.disconnect(conn_handle, 0x13)
+        helper.wait_disconnection_complete(conn_handle)
+
+
+class LowerTester(HCIDataTransWorker):
+    def main(self):
         peer_addr = self.recv()
 
         helper = LEHelper(self.sock)
 
         helper.reset()
-        cmd = btcmd.HCILEWriteSuggestedDefaultDataLength(251, (251+14)*8)
+        cmd = HCIVendorWriteLocalMaxRxOctets(100)
         helper.send_hci_cmd_wait_cmd_complt_check_status(cmd)
 
         helper.create_connection_by_peer_addr(0, peer_addr, 60, 0, 200, 50)
@@ -50,34 +78,7 @@ class IUT(HCIDataTransWorker):
 
         self.send(conn_handle)
 
-        self.wait()  # Wait lower tester to connect
-
-        helper.wait_le_event(bluez.EVT_LE_DATA_LEN_CHANGE)
-        self.wait()  # Wait lower tester to finish data length update
-
-        self.test_acl_trans_recv(CONN_TIMEOUT_MS / 1000)
-
-        helper.disconnect(conn_handle, 0x13)
-        helper.wait_disconnection_complete(conn_handle)
-
-
-class LowerTester(HCIDataTransWorker):
-    def main(self):
-        helper = LEHelper(self.sock)
-
-        helper.reset()
-
-        helper.start_advertising(0xA0)
-        evt = helper.wait_connection_complete()
-        if evt.status != 0:
-            raise bterr.TestError(
-                'connection fail: status: 0x{:02x}'.format(evt.status))
-        self.log.info('connect to %s', bytes2str(evt.peer_addr))
-        conn_handle = evt.conn_handle
-        self.send(conn_handle)
-        helper.wait_le_event(bluez.EVT_LE_DATA_LEN_CHANGE)
-
-        helper.set_data_len(conn_handle, 100)
+        helper.set_data_len(conn_handle, 251)
         helper.wait_le_event(bluez.EVT_LE_DATA_LEN_CHANGE)
         self.signal()  # Trigger next step
 
@@ -88,12 +89,10 @@ class LowerTester(HCIDataTransWorker):
 
 class TestManager(HCIDataTransCoordinator):
     def main(self):
-        self.iut.send(self.lt.bd_addr)
+        self.lt.send(self.iut.bd_addr)
 
         recv_conn_handle = self.iut.recv()
-        # Wait lower tester connection establishment
         send_conn_handle = self.lt.recv()
-        self.iut.signal()
 
         # Wait lower tester data length update
         self.lt.wait()

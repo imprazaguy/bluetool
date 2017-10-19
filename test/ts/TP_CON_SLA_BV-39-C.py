@@ -1,7 +1,7 @@
-# TP/CON/MAS/BV-40-C [Master Data Length Update - Data length update not
+# TP/CON/SLA/BV-40-C [Slave Data Length Update - Data length update not
 # supported by Tester]
 #
-# Verify that the IUT as Master correctly handles communication with a Lower
+# Verify that the IUT as Slave correctly handles communication with a Lower
 # Tester that does not support the Data Length Update Procedure
 
 import time
@@ -17,15 +17,13 @@ CONN_TIMEOUT_MS = 10000
 
 class IUT(HCIDataTransWorker):
     def main(self):
-        peer_addr = self.recv()
-
         helper = LEHelper(self.sock)
 
         helper.reset()
         cmd = btcmd.HCILEWriteSuggestedDefaultDataLength(251, (251+14)*8)
         helper.send_hci_cmd_wait_cmd_complt_check_status(cmd)
 
-        helper.create_connection_by_peer_addr(0, peer_addr, 60, 0, 200, 50)
+        helper.start_advertising(0xA0)
         evt = helper.wait_connection_complete()
         if evt.status != 0:
             raise bterr.TestError(
@@ -45,11 +43,13 @@ class IUT(HCIDataTransWorker):
 
 class LowerTester(HCIDataTransWorker):
     def main(self):
+        peer_addr = self.recv()
+
         helper = LEHelper(self.sock)
 
         helper.reset()
 
-        helper.start_advertising(0xA0)
+        helper.create_connection_by_peer_addr(0, peer_addr, 60, 0, 200, 50)
         evt = helper.wait_connection_complete()
         if evt.status != 0:
             raise bterr.TestError(
@@ -66,10 +66,9 @@ class LowerTester(HCIDataTransWorker):
 
 class TestManager(HCIDataTransCoordinator):
     def main(self):
-        self.iut.send(self.lt.bd_addr)
+        self.lt.send(self.iut.bd_addr)
 
         send_conn_handle = self.iut.recv()
-        # Wait lower tester connection establishment
         recv_conn_handle = self.lt.recv()
         time.sleep(1)  # Wait for data length update procedure to finish
         self.iut.signal()
