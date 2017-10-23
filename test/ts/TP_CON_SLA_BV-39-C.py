@@ -77,8 +77,6 @@ class TestManager(HCIDataTransCoordinator):
         succeeded = self.test_acl_trans(self.iut, self.lt, recv_conn_handle,
                                         acl_list, CONN_TIMEOUT_MS / 1000)
 
-        self.iut.send(0)
-        self.lt.send(0)
         if succeeded:
             return 0
         return 1
