@@ -14,6 +14,7 @@ class LEMaster(HCIWorker):
         self.num_peers = self.recv()
         self.peer_addr = self.recv()
         self.conn_handle = [0]*self.num_peers
+        self.connected = [False]*self.num_peers
 
         helper = LEHelper(self.sock)
         helper.reset()
@@ -38,6 +39,7 @@ class LEMaster(HCIWorker):
                             'connection fail: status: 0x{:02x}'.format(
                                 evt.status))
                     self.conn_handle[i] = evt.conn_handle
+                    self.connected[i] = True
                     self.log.info('connect to %s', bytes2str(evt.peer_addr))
                     try:
                         self.wait(10)  # wait slave connection complete
@@ -47,7 +49,7 @@ class LEMaster(HCIWorker):
                         if evt.reason == 0x3E:
                             continue
                         raise TestError(
-                            'disconnect {} with reason 0x{:02x}'.format(
+                            'disconnect {} reason 0x{:02x}'.format(
                                 bytes2str(self.peer_addr[i]), evt.reason))
 
                     time.sleep(0.1)
@@ -71,14 +73,17 @@ class LEMaster(HCIWorker):
                                         bytes2str(self.peer_addr[last_i]),
                                         evt.status))
                         elif evt.code == bluez.EVT_DISCONN_COMPLETE:
+                            self.connected[last_i] = False
                             raise TestError(
-                                'disconnect {} with reason 0x{:02x}'.format(
+                                'disconnect {} reason 0x{:02x}'.format(
                                     bytes2str(self.peer_addr[last_i]),
                                     evt.reason))
+                    # Make sure no supervision timeout in 10 secs
                     try:
                         evt = helper.wait_disconnection_complete(None, 10000)
+                        self.connected[last_i] = False
                         raise TestError(
-                            'disconnect handle 0x{:x} with reason 0x{:02x}'.format(
+                            'disconnect handle 0x{:x} reason 0x{:02x}'.format(
                                 evt.conn_handle, evt.reason))
                     except HCITimeoutError:
                         pass
@@ -86,9 +91,15 @@ class LEMaster(HCIWorker):
                 for i in xrange(0, self.num_peers):
                     helper.disconnect(self.conn_handle[i], 0x13)
                     helper.wait_disconnection_complete(self.conn_handle[i])
+                    self.connected[i] = False
 
                 succeeded = True
-            except (HCICommandError, TestError) as err:
+            except (HCICommandError, HCITimeoutError, TestError) as err:
+                for i in xrange(0, self.num_peers):
+                    if self.connected[i]:
+                        helper.disconnect(self.conn_handle[i], 0x13)
+                        helper.wait_disconnection_complete(self.conn_handle[i])
+                        self.connected[i] = False
                 self.log.warning(str(err), exc_info=True)
                 succeeded = False
             self.send(succeeded)
@@ -153,7 +164,7 @@ class LETester(HCICoordinator):
             s.signal()  # wake slave to do initialization
             s.recv()  # wait for slave to complete initialization
 
-        n_run = 1
+        n_run = 10
         n_case1_success = 0
         for i in xrange(1, n_run+1):
             # Start test
@@ -166,7 +177,7 @@ class LETester(HCICoordinator):
                 self.log.info('tester receives from %s', bytes2str(s.bd_addr))
                 self.master.signal()
 
-            print 'run #{}: case 1: '.format(i),
+            print 'run #{}: '.format(i),
             succeeded = self.master.recv()
             for s in slave:
                 succeeded = succeeded and s.recv()
@@ -181,7 +192,7 @@ class LETester(HCICoordinator):
         for s in slave:
             s.send(False)
 
-        print 'case 1 #success: {}/{}'.format(n_case1_success, n_run)
+        print '#success: {}/{}'.format(n_case1_success, n_run)
 
 
 bluetest = {
