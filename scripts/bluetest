@@ -38,13 +38,15 @@ def hci_ifdown(dev):
     hciconfig(dev, 'down')
 
 
-def bluetest_setup(log_level):
+def bluetest_setup(log_level, log_file):
     devs = hci_get_devs()
     for dev, enabled in devs.iteritems():
         if enabled:
             hci_ifdown(dev)
 
     bluetool.log_to_stream()
+    if log_file:
+        bluetool.log_to_file(log_file)
     bluetool.log_set_level(log_level)
 
 
@@ -111,6 +113,8 @@ def _parse_cmdline_args(argv):
     parser.add_argument(
         '-l', '--log_level', type=parse_log_level, default=logging.INFO,
         help='Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)')
+    parser.add_argument(
+        '-f', '--log_file', default='', help='Log output filename')
     return parser.parse_args()
 
 
@@ -119,7 +123,7 @@ def _main(argv=None):
         argv = sys.argv
     args = _parse_cmdline_args(argv)
 
-    bluetest_setup(args.log_level)
+    bluetest_setup(args.log_level, args.log_file)
     return bluetest_run_path(args.path, args.devices)
 
 
